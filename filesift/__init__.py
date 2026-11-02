@@ -1,3 +1,3 @@
-"""FileSift: local duplicate finder, junk/screenshot cleaner and bill/warranty vault."""
+"""FileSift: local duplicate finder, junk/screenshot cleaner."""
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
