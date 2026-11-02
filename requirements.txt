@@ -1,0 +1,7 @@
+PySide6==6.8.1
+Pillow>=10.0
+numpy>=1.26
+Send2Trash==1.8.3
+# Optional: text extraction from PDFs (bill auto-fill / important-file detection)
+# PyMuPDF
+# Optional: OCR for screenshots/bills -> install Tesseract OCR for Windows (and the "hin" language data for Hindi)
