@@ -1,23 +1,29 @@
-"""Headless UI smoke test (no windows shown). Run: python tests/test_ui_smoke.py"""
-import os
-import shutil
-import sys
-import tempfile
+"""Headless UI smoke test. Run: python tests/test_ui_smoke.py"""
+import os, shutil, sys, tempfile
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
+import numpy as np
+from PIL import Image
+from PySide6.QtWidgets import QApplication
 
-from filesift import app as fsapp, store, ui_review, ui_common  # noqa: E402
-from filesift.pipeline import ScanOptions, run_scan  # noqa: E402
-from test_core import _photo  # noqa: E402
+from filesift import store
+from filesift.app import MainWindow
+from filesift.context import AppContext
+from filesift.pipeline import ScanOptions, run_scan
+from filesift.selection import ToggleResult
 
 
-def test_ui_flow():
+def _photo(path, seed, size=(400, 300), fmt="JPEG"):
+    rng = np.random.default_rng(seed)
+    base = rng.integers(0, 255, (12, 16, 3), dtype=np.uint8)
+    im = Image.fromarray(base).resize(size, Image.Resampling.BICUBIC)
+    im.save(path, fmt)
+
+
+def test_smoke():
     qapp = QApplication.instance() or QApplication([])
     tmp = Path(tempfile.mkdtemp())
     try:
@@ -27,36 +33,51 @@ def test_ui_flow():
         _photo(tmp / "z.jpg", 9)
 
         con = store.connect(":memory:")
-        ctx = ui_common.AppContext(con, store.Settings(con), store.Cache(con))
-        win = fsapp.MainWindow(ctx)
-        res = run_scan(ScanOptions([str(tmp)]), ctx.cache)
-        win.on_result(res)
+        ctx = AppContext(con, store.Settings(con), store.Cache(con))
+        win = MainWindow(ctx)
 
-        d = win.dups
-        assert d.tree.topLevelItemCount() == 1
-        d.auto_select()
-        assert len(d.checked_files()) == 2
+        result = run_scan(ScanOptions([str(tmp)]), ctx.cache)
+        win._on_result(result)
 
-        # ticking every copy must be refused
-        top = d.tree.topLevelItem(0)
-        for i in range(top.childCount()):
-            top.child(i).setCheckState(0, Qt.CheckState.Checked)
-        assert len(d.checked_files()) == 2, "last copy must stay unchecked"
+        state = win._dup_page._state
+        assert state is not None
+        assert state.group_count() == 1, f"Expected 1 group, got {state.group_count()}"
 
-        ui_review.confirm = lambda *a, **k: True
+        state.auto_select("Highest resolution")
+        assert len(state.marked_files()) == 2, f"Expected 2 marked, got {len(state.marked_files())}"
+
+        state.clear()
+        g = state.group_at(0)
+        paths = [f.path for f in g.files]
+        state.toggle(paths[0])
+        state.toggle(paths[1])
+        result2 = state.toggle(paths[2])
+        assert result2 == ToggleResult.REFUSED_LAST
+        assert len(state.marked_files()) == 2
+
+        import filesift.fileops as fo
+        import filesift.dialogs as dl
         trashed = []
-        ui_review.trash_files = lambda paths: (trashed.extend(paths) or paths, [])
-        d.delete_selected()
-        assert len(trashed) == 2 and d.tree.topLevelItemCount() == 0
+        orig_trash = fo.trash_files
+        orig_confirm = dl.confirm
+        fo.trash_files = lambda ps: (trashed.extend(ps) or list(ps), [])
+        dl.confirm = lambda *a, **k: True
+        try:
+            win._dup_page._delete()
+        finally:
+            fo.trash_files = orig_trash
+            dl.confirm = orig_confirm
 
-        c = win.cleanup
-        assert c.table.rowCount() == 4
-        win.bills.reload()
+        assert len(trashed) == 2, f"Expected 2 trashed, got {len(trashed)}"
+        assert state.group_count() == 0, f"Expected 0 groups, got {state.group_count()}"
+        assert win._clean_page._model.rowCount() == 4, f"Expected 4 rows, got {win._clean_page._model.rowCount()}"
+
         win.close()
+        print("SMOKE OK")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
 if __name__ == "__main__":
-    test_ui_flow()
-    print("UI OK")
+    test_smoke()
+    print("ALL TESTS PASSED")

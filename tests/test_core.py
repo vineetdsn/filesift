@@ -12,7 +12,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from filesift import bills, reminders, store  # noqa: E402
+from filesift import store  # noqa: E402
 from filesift.duplicates import find_duplicates, pick_keeper  # noqa: E402
 from filesift.pipeline import ScanOptions, run_scan  # noqa: E402
 
@@ -59,32 +59,37 @@ def test_scan_duplicates_and_classify():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def test_bills_and_reminders():
-    con = store.connect(":memory:")
-    assert bills.add_months(date(2024, 1, 31), 1) == date(2024, 2, 29)
-    assert bills.parse_warranty_months("1 year warranty on product") == 12
-    assert bills.parse_warranty_months("Warranty: 24 months") == 24
-    f = bills.extract_bill_fields("Croma Retail\nInvoice No: INV-1234\n12/03/2024\nTotal Amount Rs. 45,999.00\n2 years warranty")
-    assert f["purchase_date"] == "2024-03-12" and f["amount"] == 45999.0
-    assert f["invoice_no"] == "INV-1234" and f["warranty_months"] == 24
-
-    today = date(2025, 1, 1)
-    b = bills.Bill(product="TV", purchase_date="2024-02-01", warranty_months=12, return_days=0)
-    bills.save_bill(con, b)
-    assert b.warranty_end == "2025-02-01"
-    due = reminders.due_reminders(con, today)                 # 31 days left -> nothing
-    assert due == []
-    due = reminders.due_reminders(con, date(2025, 1, 5))      # 27 days -> stage 30
-    assert [(d.kind, d.stage) for d in due] == [("warranty", 30)]
-    assert reminders.due_reminders(con, date(2025, 1, 6)) == []  # already sent
-    due = reminders.due_reminders(con, date(2025, 1, 30))     # 2 days -> stage 7
-    assert due and due[0].stage == 7
-    out = Path(tempfile.mkdtemp()) / "w.ics"
-    assert bills.export_ics(bills.list_bills(con), out) == 1
-    assert "BEGIN:VEVENT" in out.read_text()
+def test_store_migration():
+    """Old DB with bills table must survive opening with new store."""
+    import sqlite3, tempfile, os
+    tmp = tempfile.mktemp(suffix=".db")
+    try:
+        con_old = sqlite3.connect(tmp)
+        con_old.executescript("""
+            CREATE TABLE IF NOT EXISTS cache (path TEXT PRIMARY KEY, size INTEGER, mtime REAL, feat TEXT, sha TEXT, text TEXT);
+            CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+            CREATE TABLE IF NOT EXISTS bills (id INTEGER PRIMARY KEY, product TEXT);
+            CREATE TABLE IF NOT EXISTS reminders_sent (bill_id INTEGER, kind TEXT, stage INTEGER);
+            INSERT INTO bills VALUES (1, 'TV');
+            INSERT INTO settings VALUES ('vault_dir', '/some/path');
+        """)
+        con_old.commit()
+        con_old.close()
+        from filesift.store import connect, Settings
+        con_new = connect(tmp)
+        rows = con_new.execute("SELECT * FROM bills").fetchall()
+        assert len(rows) == 1, "bills table must be preserved"
+        s = Settings(con_new)
+        assert "some" in str(s.vault_dir), f"vault_dir not read: {s.vault_dir}"
+        con_new.close()
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":
     test_scan_duplicates_and_classify()
-    test_bills_and_reminders()
+    test_store_migration()
     print("ALL OK")
