@@ -1,6 +1,4 @@
-"""Launch FileSift.   python run.py            -> open the app
-                     python run.py --reminders -> show due warranty reminders and exit (used by Task Scheduler)
-"""
+"""Launch FileSift.   python run.py"""
 import sys
 
 from filesift.app import main
