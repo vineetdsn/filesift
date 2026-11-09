@@ -144,6 +144,30 @@ class _LineIconEngine(QIconEngine):
             painter.drawLine(QPointF(14 * sx, 3.5 * sy), QPointF(14 * sx, 8 * sy))
             painter.drawLine(QPointF(14 * sx, 8 * sy), QPointF(18.5 * sx, 8 * sy))
 
+        elif n == "disk":
+            # Sleek hard drive / storage icon
+            painter.drawRoundedRect(QRectF(3.5 * sx, 6 * sy, 17 * sx, 12 * sy), 2 * sx, 2 * sy)
+            painter.drawLine(QPointF(3.5 * sx, 13 * sy), QPointF(20.5 * sx, 13 * sy))
+            painter.drawEllipse(QRectF(16 * sx, 14.5 * sy, 1.8 * sx, 1.8 * sy))
+
+        elif n == "shield":
+            # Clean protective shield
+            path = QPainterPath()
+            path.moveTo(12 * sx, 3.5 * sy)
+            path.lineTo(19.5 * sx, 6.5 * sy)
+            path.lineTo(19.5 * sx, 12.5 * sy)
+            path.cubicTo(19.5 * sx, 17 * sy, 15 * sx, 20.5 * sy, 12 * sx, 21.5 * sy)
+            path.cubicTo(9 * sx, 20.5 * sy, 4.5 * sx, 17 * sy, 4.5 * sx, 12.5 * sy)
+            path.lineTo(4.5 * sx, 6.5 * sy)
+            path.closeSubpath()
+            painter.drawPath(path)
+
+        elif n == "more":
+            # Three minimalist dots
+            painter.drawEllipse(QRectF(5 * sx, 11 * sy, 2 * sx, 2 * sy))
+            painter.drawEllipse(QRectF(11 * sx, 11 * sy, 2 * sx, 2 * sy))
+            painter.drawEllipse(QRectF(17 * sx, 11 * sy, 2 * sx, 2 * sy))
+
         elif n == "moon":
             path = QPainterPath()
             path.moveTo(18 * sx, 13 * sy)
