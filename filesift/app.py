@@ -1,4 +1,4 @@
-"""Main window and entry point — no tray, no timers, no bills."""
+"""Main window and entry point — modern UI/UX Pro Max."""
 from __future__ import annotations
 
 import sys
@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QApplication, QHBoxLayout, QMainWindow,
                                QStackedWidget, QWidget)
 
-from . import store, theme
+from . import icons, store, theme
 from .context import AppContext
 from .page_cleanup import CleanupPage
 from .page_duplicates import DuplicatesPage
@@ -19,24 +19,30 @@ class MainWindow(QMainWindow):
     def __init__(self, ctx: AppContext):
         super().__init__()
         self.ctx = ctx
-        self.setWindowTitle("FileSift")
-        self.resize(1250, 800)
-        self.setMinimumSize(1000, 650)
+        self.setWindowTitle("FileSift — Storage Optimizer")
+        self.setWindowIcon(icons.icon("scan", "#E2B170"))
+        self.resize(1280, 820)
+        self.setMinimumSize(1020, 680)
+
         central = QWidget()
         self.setCentralWidget(central)
         lay = QHBoxLayout(central)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
+
         self._sidebar = Sidebar(central)
         self._stack = QStackedWidget(central)
         lay.addWidget(self._sidebar)
         lay.addWidget(self._stack, 1)
+
         self._scan_page = ScanPage(ctx, self._stack)
         self._dup_page = DuplicatesPage(ctx, self._stack)
         self._clean_page = CleanupPage(ctx, self._stack)
+
         self._stack.addWidget(self._scan_page)
         self._stack.addWidget(self._dup_page)
         self._stack.addWidget(self._clean_page)
+
         self._page_map = {"scan": 0, "duplicates": 1, "cleanup": 2}
         self._sidebar.page_requested.connect(self._show_page)
         self._scan_page.result_ready.connect(self._on_result)

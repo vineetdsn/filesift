@@ -1,9 +1,9 @@
-"""Duplicates page: group list with tile grid, selection and delete."""
+"""Duplicates page: group list with tile grid, selection and delete — Nordic Zen UI/UX."""
 from __future__ import annotations
 
 from PySide6.QtCore import (QAbstractListModel, QEvent, QModelIndex, QPoint,
-                           QRect, QSize, Qt)
-from PySide6.QtGui import QColor, QFont, QImageReader, QPainter, QPen, QPixmap
+                            QRect, QRectF, QSize, Qt)
+from PySide6.QtGui import QColor, QFont, QImageReader, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QListView,
                                 QSplitter, QStyledItemDelegate,
                                 QVBoxLayout, QWidget)
@@ -13,12 +13,12 @@ from .context import AppContext
 from .duplicates import KEEPER_RULES
 from .models import DupGroup, FileInfo
 from .selection import LAST_COPY_MSG, SelectionState, ToggleResult
-from .widgets import PillButton, PreviewPanel
+from .widgets import Card, PillButton, PreviewPanel
 
-TILE_W = 152
-TILE_H = 178
-THUMB_H = 112
-HEADER_H = 40
+TILE_W = 168
+TILE_H = 196
+THUMB_H = 120
+HEADER_H = 46
 
 
 def _load_thumb(path: str, box: int) -> QPixmap:
@@ -70,12 +70,12 @@ class GroupDelegate(QStyledItemDelegate):
         return index.data(GroupModel.GROUP_ROLE)
 
     def _tiles(self, group: DupGroup, row: QRect) -> list[tuple[FileInfo, QRect]]:
-        cols = max(1, (row.width() - 24) // (TILE_W + 8))
+        cols = max(1, (row.width() - 24) // (TILE_W + 10))
         out = []
-        x0, y0 = row.left() + 12, row.top() + HEADER_H
+        x0, y0 = row.left() + 14, row.top() + HEADER_H
         for i, f in enumerate(group.files):
             r, c = i // cols, i % cols
-            out.append((f, QRect(x0 + c * (TILE_W + 8), y0 + r * (TILE_H + 8),
+            out.append((f, QRect(x0 + c * (TILE_W + 10), y0 + r * (TILE_H + 10),
                                   TILE_W, TILE_H)))
         return out
 
@@ -84,9 +84,9 @@ class GroupDelegate(QStyledItemDelegate):
         if group is None:
             return QSize(0, 0)
         w = option.rect.width() or 600
-        cols = max(1, (w - 24) // (TILE_W + 8))
+        cols = max(1, (w - 24) // (TILE_W + 10))
         rows = max(1, (len(group.files) + cols - 1) // cols)
-        return QSize(w, HEADER_H + rows * (TILE_H + 8) + 8)
+        return QSize(w, HEADER_H + rows * (TILE_H + 10) + 12)
 
     def paint(self, painter: QPainter, option, index: QModelIndex) -> None:
         group = self._group(index)
@@ -95,18 +95,21 @@ class GroupDelegate(QStyledItemDelegate):
         pal = theme.current()
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
         bg = option.rect.adjusted(6, 6, -6, -6)
-        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setPen(QPen(QColor(pal.panel_border), 1))
         painter.setBrush(QColor(pal.panel))
-        painter.drawRoundedRect(bg, theme.RADIUS_CONTROL, theme.RADIUS_CONTROL)
-        painter.setPen(QColor(pal.text))
+        painter.drawRoundedRect(bg, theme.RADIUS_CARD, theme.RADIUS_CARD)
+
+        header_rect = QRect(bg.left() + 14, bg.top() + 8, bg.width() - 28, HEADER_H - 12)
         f = QFont(painter.font())
+        f.setPointSize(12)
         f.setBold(True)
         painter.setFont(f)
-        painter.drawText(QRect(bg.left() + 12, bg.top() + 6,
-                               bg.width() - 24, HEADER_H - 8),
-                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                         presenters.group_header(index.row() + 1, group))
+        painter.setPen(QColor(pal.text))
+        header_text = presenters.group_header(index.row() + 1, group)
+        painter.drawText(header_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, header_text)
+
         for f, r in self._tiles(group, option.rect):
             self._paint_tile(painter, f, r)
         painter.restore()
@@ -114,40 +117,72 @@ class GroupDelegate(QStyledItemDelegate):
     def _paint_tile(self, painter: QPainter, f: FileInfo, r: QRect) -> None:
         pal = theme.current()
         marked = self._page._state.is_marked(f.path)
+
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(pal.card_top).darker(108) if marked else QColor(pal.bg).lighter(118))
+        tile_bg = QColor(pal.card_top) if not marked else QColor(pal.danger).darker(280)
+        painter.setBrush(tile_bg)
         painter.drawRoundedRect(r, theme.RADIUS_CONTROL, theme.RADIUS_CONTROL)
+
         if marked:
-            painter.setPen(QPen(QColor(pal.accent), 2))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRoundedRect(r.adjusted(1, 1, -1, -1),
-                                    theme.RADIUS_CONTROL, theme.RADIUS_CONTROL)
+            painter.setPen(QPen(QColor(pal.danger), 1.5))
+        else:
+            painter.setPen(QPen(QColor(pal.accent), 1))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(r.adjusted(1, 1, -1, -1), theme.RADIUS_CONTROL, theme.RADIUS_CONTROL)
+
         thumb = r.adjusted(6, 6, -6, -(TILE_H - THUMB_H - 6))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(pal.bg))
+        painter.drawRoundedRect(thumb, theme.RADIUS_CONTROL - 2, theme.RADIUS_CONTROL - 2)
+
         pm = self._page.thumb(f)
         if not pm.isNull():
             scaled = pm.scaled(thumb.size(), Qt.AspectRatioMode.KeepAspectRatio,
                                Qt.TransformationMode.SmoothTransformation)
             painter.drawPixmap(thumb.left() + (thumb.width() - scaled.width()) // 2,
-                               thumb.top(), scaled)
+                               thumb.top() + (thumb.height() - scaled.height()) // 2, scaled)
         else:
             painter.setPen(QColor(pal.text_muted))
             painter.drawText(thumb, Qt.AlignmentFlag.AlignCenter,
                              presenters.placeholder_label(f))
+
+        badge_w, badge_h = 52, 20
+        badge_rect = QRect(r.right() - badge_w - 6, r.top() + 6, badge_w, badge_h)
+        painter.setPen(Qt.PenStyle.NoPen)
+        if marked:
+            painter.setBrush(QColor(pal.danger))
+            badge_text = "DELETE"
+            badge_fg = QColor("#FFFFFF")
+        else:
+            painter.setBrush(QColor(pal.accent))
+            badge_text = "KEEP"
+            badge_fg = QColor(pal.on_accent)
+
+        painter.drawRoundedRect(badge_rect, 6, 6)
+        painter.setPen(badge_fg)
+        bf = QFont(painter.font())
+        bf.setPointSize(8)
+        bf.setBold(True)
+        painter.setFont(bf)
+        painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, badge_text)
+
         name, size, meta = presenters.tile_lines(f)
         painter.setPen(QColor(pal.text))
         nf = QFont(painter.font())
         nf.setBold(True)
-        nf.setPointSize(8)
+        nf.setPointSize(9)
         painter.setFont(nf)
-        painter.drawText(QRect(r.left() + 6, thumb.bottom() + 4, r.width() - 12, 16),
-                         Qt.AlignmentFlag.AlignLeft, _elide(name, r.width() - 12, painter))
+        painter.drawText(QRect(r.left() + 8, thumb.bottom() + 6, r.width() - 16, 16),
+                         Qt.AlignmentFlag.AlignLeft, _elide(name, r.width() - 16, painter))
+
         painter.setPen(QColor(pal.text_muted))
         sf = QFont(painter.font())
         sf.setBold(False)
+        sf.setPointSize(8)
         painter.setFont(sf)
-        painter.drawText(QRect(r.left() + 6, thumb.bottom() + 20, r.width() - 12, 14),
+        painter.drawText(QRect(r.left() + 8, thumb.bottom() + 23, r.width() - 16, 14),
                          Qt.AlignmentFlag.AlignLeft, size)
-        painter.drawText(QRect(r.left() + 6, thumb.bottom() + 34, r.width() - 12, 14),
+        painter.drawText(QRect(r.left() + 8, thumb.bottom() + 38, r.width() - 16, 14),
                          Qt.AlignmentFlag.AlignLeft, meta)
 
     def editorEvent(self, event, model, option, index: QModelIndex) -> bool:
@@ -189,41 +224,70 @@ class DuplicatesPage(QWidget):
         self._thumbs: dict[str, QPixmap] = {}
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(24, 22, 24, 22)
+        lay.setContentsMargins(28, 24, 28, 24)
         lay.setSpacing(14)
 
-        self._summary = QLabel("Run a scan first.")
-        self._summary.setProperty("kind", "muted")
-        lay.addWidget(self._summary)
+        # Header Title
+        title_box = QVBoxLayout()
+        title_box.setSpacing(4)
+        page_title = QLabel("Duplicate Files Review")
+        ptf = page_title.font()
+        ptf.setPointSize(18)
+        ptf.setBold(True)
+        page_title.setFont(ptf)
 
-        bar = QHBoxLayout()
+        self._summary = QLabel("Run a scan from the Scan & Folders tab to find duplicates.")
+        self._summary.setProperty("kind", "muted")
+        title_box.addWidget(page_title)
+        title_box.addWidget(self._summary)
+        lay.addLayout(title_box)
+
+        # Controls & action toolbar
+        tool_card = Card("panel")
+        bar = QHBoxLayout(tool_card)
+        bar.setContentsMargins(14, 10, 14, 10)
         bar.setSpacing(10)
-        bar.addWidget(QLabel("Keep:"))
+
+        keep_lbl = QLabel("Keeper Rule:")
+        kf = keep_lbl.font()
+        kf.setBold(True)
+        keep_lbl.setFont(kf)
+        bar.addWidget(keep_lbl)
+
         self._rule = QComboBox()
         self._rule.addItems(list(KEEPER_RULES))
+        self._rule.setMinimumWidth(160)
         bar.addWidget(self._rule)
-        auto = PillButton("Auto-select")
+
+        auto = PillButton("Auto-select Keepers")
         auto.clicked.connect(self._auto_select)
-        clear = PillButton("Clear")
+        clear = PillButton("Clear Selection")
         clear.clicked.connect(self._clear_selection)
         bar.addWidget(auto)
         bar.addWidget(clear)
         bar.addStretch(1)
+
         self._marked_lbl = QLabel("Nothing marked")
         self._marked_lbl.setProperty("kind", "muted")
+        mf = self._marked_lbl.font()
+        mf.setBold(True)
+        self._marked_lbl.setFont(mf)
         bar.addWidget(self._marked_lbl)
-        self._delete_btn = PillButton("Move to Recycle Bin", primary=True)
+
+        self._delete_btn = PillButton("Move to Recycle Bin", danger=True)
         theme.add_glow(self._delete_btn)
         self._delete_btn.clicked.connect(self._delete)
         bar.addWidget(self._delete_btn)
-        lay.addLayout(bar)
+        lay.addWidget(tool_card)
 
+        # Splitter: List view + Preview panel
         self._view = QListView()
         self._view.setModel(self._model)
         self._view.setItemDelegate(GroupDelegate(self, self._view))
         self._view.setSpacing(8)
         self._view.clicked.connect(self._on_clicked)
         self._preview = PreviewPanel()
+
         split = QSplitter()
         split.addWidget(self._view)
         split.addWidget(self._preview)
@@ -267,13 +331,13 @@ class DuplicatesPage(QWidget):
         self._state.auto_select(self._rule.currentText())
         self._model.refresh()
         self._update_marked()
-        self._status.setText(f"Auto-selected using '{self._rule.currentText()}'.")
+        self._status.setText(f"Automatically marked duplicates using rule '{self._rule.currentText()}'.")
 
     def _clear_selection(self) -> None:
         self._state.clear()
         self._model.refresh()
         self._update_marked()
-        self._status.setText("")
+        self._status.setText("Selection cleared.")
 
     def _on_clicked(self, index: QModelIndex) -> None:
         group = index.data(GroupModel.GROUP_ROLE)
@@ -283,11 +347,11 @@ class DuplicatesPage(QWidget):
     def _delete(self) -> None:
         files = self._state.marked_files()
         if not files:
-            self._status.setText("Nothing marked.")
+            self._status.setText("No duplicate files marked for deletion.")
             return
         msg, warning = fileops.trash_confirm_text(files)
         text = msg + (("\n\n" + warning) if warning else "")
-        if not dialogs.confirm(self, "Move to Recycle Bin", text,
+        if not dialogs.confirm(self, "Move Duplicates to Recycle Bin", text,
                                ok_text="Move to Recycle Bin"):
             return
         done, errors = fileops.trash_files([f.path for f in files])
@@ -300,6 +364,6 @@ class DuplicatesPage(QWidget):
             dialogs.message(self, "Some files failed",
                             fileops.error_dialog_text(errors))
         freed = sum(f.size for f in files if f.path in set(done))
-        self._status.setText(f"Moved {len(done)} files to the Recycle Bin"
-                             + (f", freed {freed // 1024} KB" if done else "") + ".")
+        self._status.setText(f"Safely moved {len(done)} files to Recycle Bin"
+                             + (f" (freed {freed // 1024} KB)" if done else "") + ".")
         self._update_summary()

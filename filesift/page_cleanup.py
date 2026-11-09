@@ -1,21 +1,21 @@
-"""Cleanup page: filtered/sorted file list with ticks and actions."""
+"""Cleanup page: filtered/sorted file list with ticks and actions — Nordic Zen UI/UX."""
 from __future__ import annotations
 
 from pathlib import Path
 
 from PySide6.QtCore import (QAbstractListModel, QEvent, QModelIndex, QRect,
-                           QSize, Qt)
-from PySide6.QtGui import QColor, QFont, QPainter, QPen
+                            QSize, Qt)
+from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QHBoxLayout, QLabel,
-                                QListView, QSplitter, QStyledItemDelegate,
+                                QListView, QSplitter, QStyle, QStyledItemDelegate,
                                 QVBoxLayout, QWidget)
 
 from . import cleanup_logic, dialogs, fileops, presenters, theme
 from .context import AppContext
 from .models import FileInfo
-from .widgets import PillButton, PreviewPanel
+from .widgets import Card, PillButton, PreviewPanel
 
-ROW_H = 64
+ROW_H = 68
 
 
 class CleanupModel(QAbstractListModel):
@@ -59,7 +59,7 @@ class RowDelegate(QStyledItemDelegate):
         if f.bucket == "delete":
             return QColor(pal.accent)
         if f.bucket == "review":
-            return QColor(pal.danger)
+            return QColor(pal.warning)
         return QColor(pal.text_muted)
 
     def paint(self, painter: QPainter, option, index: QModelIndex) -> None:
@@ -69,71 +69,85 @@ class RowDelegate(QStyledItemDelegate):
         pal = theme.current()
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
         row = option.rect.adjusted(8, 4, -8, -4)
-        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setPen(QPen(QColor(pal.panel_border), 1))
         painter.setBrush(QColor(pal.panel))
         painter.drawRoundedRect(row, theme.RADIUS_CONTROL, theme.RADIUS_CONTROL)
-        if option.state & 0x80:  # QStyle.State_Selected
+
+        if bool(option.state & QStyle.StateFlag.State_Selected):
+            painter.setPen(QPen(QColor(pal.accent), 1))
             painter.setBrush(QColor(pal.nav_hover))
             painter.drawRoundedRect(row, theme.RADIUS_CONTROL, theme.RADIUS_CONTROL)
 
-        # category dot
         mid = row.top() + row.height() // 2
-        painter.setBrush(self._verdict_color(f))
-        painter.drawEllipse(QRect(row.left() + 14, mid - 9, 18, 18))
 
-        # name + subtitle
-        name_x = row.left() + 42
-        name_w = row.width() - 42 - 200
+        # Minimalist category dot
+        vc = self._verdict_color(f)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(vc)
+        painter.drawEllipse(QRect(row.left() + 16, mid - 6, 12, 12))
+
+        # File name & subtitle
+        name_x = row.left() + 38
+        name_w = row.width() - 38 - 220
         nf = QFont(painter.font())
         nf.setBold(True)
+        nf.setPointSize(10)
         painter.setFont(nf)
         painter.setPen(QColor(pal.text))
-        painter.drawText(QRect(name_x, row.top() + 9, name_w, 18),
+        painter.drawText(QRect(name_x, row.top() + 12, name_w, 20),
                          Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                          f.name)
+
         sf = QFont(painter.font())
         sf.setBold(False)
-        sf.setPointSize(8)
+        sf.setPointSize(9)
         painter.setFont(sf)
         painter.setPen(QColor(pal.text_muted))
-        painter.drawText(QRect(name_x, row.top() + 30, name_w, 18),
+        painter.drawText(QRect(name_x, row.top() + 34, name_w, 18),
                          Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                          presenters.row_subtitle(f))
 
-        # verdict pill
+        # Status micro-pill
         label = cleanup_logic.VERDICT_LABEL.get(f.bucket, "Keep")
         if f.tags:
             label = "Important"
         if f.protected:
             label += " · protected"
-        vc = self._verdict_color(f)
-        pill = QRect(row.right() - 178, mid - 11, 130, 22)
+
+        pill = QRect(row.right() - 190, mid - 12, 140, 24)
         bg = QColor(vc)
-        bg.setAlpha(48)
-        painter.setPen(Qt.PenStyle.NoPen)
+        bg.setAlpha(28)
+        painter.setPen(QPen(vc, 1))
         painter.setBrush(bg)
-        painter.drawRoundedRect(pill, 11, 11)
+        painter.drawRoundedRect(pill, 6, 6)
+
         painter.setPen(vc)
         pf = QFont(painter.font())
         pf.setPointSize(8)
+        pf.setBold(True)
         painter.setFont(pf)
         painter.drawText(pill, Qt.AlignmentFlag.AlignCenter, label)
 
-        # tick box
+        # Minimal checkbox
         tick = QRect(row.right() - 34, mid - 11, 22, 22)
-        painter.setPen(QPen(QColor(pal.input_border), 1))
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawRoundedRect(tick, 5, 5)
-        if self._page._ticks.is_ticked(f.path):
+        is_ticked = self._page._ticks.is_ticked(f.path)
+
+        if is_ticked:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(pal.accent))
-            painter.drawRoundedRect(tick.adjusted(4, 4, -4, -4), 3, 3)
-            painter.setPen(QColor(pal.on_accent))
-            painter.drawLine(tick.left() + 6, tick.center().y(),
+            painter.drawRoundedRect(tick, 5, 5)
+            painter.setPen(QPen(QColor(pal.on_accent), 1.5))
+            painter.drawLine(tick.left() + 5, tick.center().y(),
                              tick.center().x() - 1, tick.bottom() - 6)
             painter.drawLine(tick.center().x() - 1, tick.bottom() - 6,
                              tick.right() - 5, tick.top() + 6)
+        else:
+            painter.setPen(QPen(QColor(pal.input_border), 1))
+            painter.setBrush(QColor(pal.bg))
+            painter.drawRoundedRect(tick, 5, 5)
+
         painter.restore()
 
     def editorEvent(self, event, model, option, index: QModelIndex) -> bool:
@@ -161,16 +175,30 @@ class CleanupPage(QWidget):
         self._ticks = cleanup_logic.TickSet()
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(24, 22, 24, 22)
+        lay.setContentsMargins(28, 24, 28, 24)
         lay.setSpacing(14)
 
-        self._summary = QLabel("Run a scan first.")
-        self._summary.setProperty("kind", "muted")
-        lay.addWidget(self._summary)
+        # Header Title
+        title_box = QVBoxLayout()
+        title_box.setSpacing(4)
+        page_title = QLabel("Storage Cleanup & Organization")
+        ptf = page_title.font()
+        ptf.setPointSize(18)
+        ptf.setBold(True)
+        page_title.setFont(ptf)
 
-        # filter pills + combos
-        filt = QHBoxLayout()
+        self._summary = QLabel("Run a scan from the Scan & Folders tab to analyze files.")
+        self._summary.setProperty("kind", "muted")
+        title_box.addWidget(page_title)
+        title_box.addWidget(self._summary)
+        lay.addLayout(title_box)
+
+        # Filter Card
+        filter_card = Card("panel")
+        filt = QHBoxLayout(filter_card)
+        filt.setContentsMargins(14, 10, 14, 10)
         filt.setSpacing(8)
+
         self._verdict_group = QButtonGroup(self)
         self._verdict_group.setExclusive(True)
         for i, name in enumerate(cleanup_logic.VERDICT_FILTERS):
@@ -180,44 +208,57 @@ class CleanupPage(QWidget):
             b.clicked.connect(self._refresh)
             self._verdict_group.addButton(b)
             filt.addWidget(b)
+
         filt.addStretch(1)
-        filt.addWidget(QLabel("Category:"))
+
+        cat_lbl = QLabel("Category:")
+        cat_lbl.setProperty("kind", "muted")
+        filt.addWidget(cat_lbl)
         self._category = QComboBox()
         self._category.addItem("All categories")
         self._category.currentIndexChanged.connect(self._refresh)
         filt.addWidget(self._category)
-        filt.addWidget(QLabel("Sort:"))
+
+        sort_lbl = QLabel("Sort:")
+        sort_lbl.setProperty("kind", "muted")
+        filt.addWidget(sort_lbl)
         self._sort = QComboBox()
         self._sort.addItems(list(cleanup_logic.SORTS))
         self._sort.currentIndexChanged.connect(self._refresh)
         filt.addWidget(self._sort)
-        lay.addLayout(filt)
+        lay.addWidget(filter_card)
 
-        # actions
-        act = QHBoxLayout()
+        # Action Buttons Toolbar
+        action_card = Card("panel")
+        act = QHBoxLayout(action_card)
+        act.setContentsMargins(14, 8, 14, 8)
         act.setSpacing(10)
-        tick_safe = PillButton("Tick all safe to delete")
+
+        tick_safe = PillButton("Tick Safe to Delete", primary=True)
         tick_safe.clicked.connect(self._tick_safe)
-        clear = PillButton("Clear ticks")
+        clear = PillButton("Clear Ticks")
         clear.clicked.connect(self._clear_ticks)
-        imp = PillButton("Move to Important folder")
+        imp = PillButton("Move to Important Vault")
         imp.clicked.connect(self._move_important)
-        trash = PillButton("Move to Recycle Bin", primary=True)
+        trash = PillButton("Move to Recycle Bin", danger=True)
         theme.add_glow(trash)
         trash.clicked.connect(self._trash_ticked)
+
         act.addWidget(tick_safe)
         act.addWidget(clear)
         act.addStretch(1)
         act.addWidget(imp)
         act.addWidget(trash)
-        lay.addLayout(act)
+        lay.addWidget(action_card)
 
+        # Splitter: List view + Preview panel
         self._view = QListView()
         self._view.setModel(self._model)
         self._view.setItemDelegate(RowDelegate(self, self._view))
         self._view.setSpacing(6)
         self._view.clicked.connect(self._on_clicked)
         self._preview = PreviewPanel()
+
         split = QSplitter()
         split.addWidget(self._view)
         split.addWidget(self._preview)
@@ -289,11 +330,11 @@ class CleanupPage(QWidget):
     def _trash_ticked(self) -> None:
         files = self._ticked_files()
         if not files:
-            self._status.setText("Nothing ticked.")
+            self._status.setText("No files ticked for deletion.")
             return
         msg, warning = fileops.trash_confirm_text(files)
         text = msg + (("\n\n" + warning) if warning else "")
-        if not dialogs.confirm(self, "Move to Recycle Bin", text,
+        if not dialogs.confirm(self, "Move Files to Recycle Bin", text,
                                ok_text="Move to Recycle Bin"):
             return
         done, errors = fileops.trash_files([f.path for f in files])
@@ -307,10 +348,10 @@ class CleanupPage(QWidget):
     def _move_important(self) -> None:
         files = self._ticked_files()
         if not files:
-            self._status.setText("Nothing ticked.")
+            self._status.setText("No files ticked to move.")
             return
         base = self.ctx.settings.vault_dir / "Important"
-        if not dialogs.confirm(self, "Move to Important folder",
+        if not dialogs.confirm(self, "Move to Important Vault",
                                 fileops.move_confirm_text(files, base),
                                 ok_text="Move"):
             return
