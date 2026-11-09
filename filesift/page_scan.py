@@ -1,4 +1,4 @@
-"""Scan page: folder selection, options, stats and progress — Nordic Zen UI/UX."""
+"""Scan page: folder selection, bento storage breakdown, options, and progress — Nordic Zen UI/UX."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,17 +6,22 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QListWidget,
-                               QListWidgetItem, QProgressBar, QPushButton, QSlider,
-                               QVBoxLayout, QWidget)
+                               QListWidgetItem, QProgressBar, QScrollArea,
+                               QSlider, QVBoxLayout, QWidget)
 
 from . import icons, presenters, textextract, theme
 from .context import AppContext
 from .pipeline import ScanOptions
-from .widgets import Card, ListRow, PillButton, StatCard, ToggleSwitch
+from .widgets import (Card, CategoryBentoCard, DiskUsageCard, ListRow,
+                      PillButton, StatCard, ToggleSwitch)
 from .worker import ScanWorker
 
-STAT_LABELS = ["Files scanned", "Total size", "Duplicate groups", "Reclaimable",
-               "Safe to delete"]
+STAT_LABELS = [
+    "Files scanned",
+    "Total size",
+    "Duplicate groups",
+    "Reclaimable space",
+]
 
 
 class ScanPage(QWidget):
@@ -28,110 +33,169 @@ class ScanPage(QWidget):
         self._worker: ScanWorker | None = None
         self._stat_cards: list[StatCard] = []
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(28, 24, 28, 24)
-        root.setSpacing(16)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
 
-        # Header Title & Description
-        header_box = QVBoxLayout()
-        header_box.setSpacing(4)
-        page_title = QLabel("Storage Scan & Cleanup Setup")
+        # Scroll Area for responsive vertical breathing room
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setStyleSheet("background: transparent; border: none;")
+
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        root = QVBoxLayout(container)
+        root.setContentsMargins(32, 24, 32, 28)
+        root.setSpacing(18)
+
+        # --- Top Header & Action Row (Concept 6 Style) ---
+        top_bar = QHBoxLayout()
+        top_bar.setSpacing(16)
+
+        title_box = QVBoxLayout()
+        title_box.setSpacing(3)
+        page_title = QLabel("Storage Overview & Sifter")
         ptf = page_title.font()
-        ptf.setPointSize(18)
+        ptf.setPointSize(19)
         ptf.setBold(True)
         page_title.setFont(ptf)
 
-        page_desc = QLabel("Select directories to clean up, set safe protection rules, and run duplicate analysis.")
+        page_desc = QLabel("Intelligent duplicate detection, photo similarity hashing, and storage reclamation.")
         page_desc.setProperty("kind", "muted")
         page_desc_f = page_desc.font()
         page_desc_f.setPointSize(11)
         page_desc.setFont(page_desc_f)
 
-        header_box.addWidget(page_title)
-        header_box.addWidget(page_desc)
-        root.addLayout(header_box)
+        title_box.addWidget(page_title)
+        title_box.addWidget(page_desc)
+        top_bar.addLayout(title_box, 1)
 
-        # --- folder cards ---
-        folders = QHBoxLayout()
-        folders.setSpacing(16)
-        folders.addWidget(self._folder_card("Folders to Scan", "scan_roots",
-                                            "Add directories you want scanned and cleaned up."), 1)
-        folders.addWidget(self._folder_card("Protected Folders", "protected_dirs",
-                                            "Scanned for context, but files here are NEVER deleted."), 1)
-        root.addLayout(folders, 1)
+        # Action Buttons on Top Right
+        action_btn_box = QHBoxLayout()
+        action_btn_box.setSpacing(10)
 
-        # --- important folder + options ---
-        root.addWidget(self._important_row())
+        self._cancel = PillButton("Cancel")
+        self._cancel.setFixedHeight(38)
+        self._cancel.setEnabled(False)
+        self._cancel.clicked.connect(self._cancel_scan)
+
+        self._start = PillButton("Start Deep Scan ⚡", primary=True)
+        self._start.setFixedHeight(38)
+        theme.add_glow(self._start)
+        self._start.clicked.connect(self.start_scan)
+
+        action_btn_box.addWidget(self._cancel)
+        action_btn_box.addWidget(self._start)
+        top_bar.addLayout(action_btn_box)
+
+        root.addLayout(top_bar)
+
+        # --- 1. Disk Usage Hero Card ---
+        self._disk_card = DiskUsageCard(container)
+        root.addWidget(self._disk_card)
+
+        # --- 2. Concept 6 Category Bento Cards (3 Modular Cards) ---
+        bento_row = QHBoxLayout()
+        bento_row.setSpacing(14)
+
+        self._bento_caches = CategoryBentoCard(
+            "trash",
+            "Temporary & App Caches",
+            "14.2 GB",
+            "System cache, temporary files, and app logs",
+            checked=True,
+            parent=container,
+        )
+        self._bento_photos = CategoryBentoCard(
+            "image",
+            "Duplicate & Similar Photos",
+            "3.8 GB",
+            "Perceptual image hashing & burst shots",
+            checked=True,
+            parent=container,
+        )
+        self._bento_installers = CategoryBentoCard(
+            "file",
+            "Orphaned Installers & Media",
+            "9.4 GB",
+            "Downloaded packages, archives & large media",
+            checked=True,
+            parent=container,
+        )
+
+        bento_row.addWidget(self._bento_caches)
+        bento_row.addWidget(self._bento_photos)
+        bento_row.addWidget(self._bento_installers)
+        root.addLayout(bento_row)
+
+        # --- 3. 2-Column Bento: Folders to Scan & Protection Vault ---
+        folders_grid = QHBoxLayout()
+        folders_grid.setSpacing(14)
+        folders_grid.addWidget(self._folder_card(
+            "Folders to Scan",
+            "scan_roots",
+            "Directories checked for duplicate files and clutter."
+        ), 1)
+        folders_grid.addWidget(self._protected_vault_card(), 1)
+        root.addLayout(folders_grid)
+
+        # --- 4. Detection Parameters Bento Card ---
         root.addWidget(self._options_card())
 
-        # --- stat cards ---
-        stats_box = QVBoxLayout()
-        stats_box.setSpacing(6)
-        stats_head = QLabel("SCAN SUMMARY & RESULTS")
+        # --- 5. Scan Summary & Progress Bento Section ---
+        summary_card = Card("panel", container)
+        sum_lay = QVBoxLayout(summary_card)
+        sum_lay.setContentsMargins(18, 16, 18, 16)
+        sum_lay.setSpacing(12)
+
+        stats_head = QLabel("SCAN SUMMARY & METRICS")
         stats_head.setProperty("kind", "muted")
         shf = stats_head.font()
         shf.setPointSize(9)
         shf.setBold(True)
         stats_head.setFont(shf)
-        stats_box.addWidget(stats_head)
+        sum_lay.addWidget(stats_head)
 
-        stats = QHBoxLayout()
-        stats.setSpacing(12)
+        stats_row = QHBoxLayout()
+        stats_row.setSpacing(12)
         for label in STAT_LABELS:
-            card = StatCard(label)
+            card = StatCard(label, summary_card)
             self._stat_cards.append(card)
-            stats.addWidget(card, 1)
-        stats_box.addLayout(stats)
-        root.addLayout(stats_box)
+            stats_row.addWidget(card, 1)
+        sum_lay.addLayout(stats_row)
 
-        # --- progress + actions ---
-        action_card = Card("panel")
-        action_lay = QVBoxLayout(action_card)
-        action_lay.setContentsMargins(16, 14, 16, 14)
-        action_lay.setSpacing(10)
-
-        actions = QHBoxLayout()
-        actions.setSpacing(12)
-
-        self._start = PillButton("Start Scan", primary=True)
-        self._start.setFixedHeight(42)
-        theme.add_glow(self._start)
-
-        self._cancel = PillButton("Cancel")
-        self._cancel.setFixedHeight(42)
-        self._cancel.setEnabled(False)
-
-        self._start.clicked.connect(self.start_scan)
-        self._cancel.clicked.connect(self._cancel_scan)
-
-        self._bar = QProgressBar()
+        # Progress bar & stage readout
+        self._bar = QProgressBar(summary_card)
         self._bar.setRange(0, 1)
         self._bar.setValue(0)
-        self._bar.setFixedHeight(22)
+        self._bar.setFixedHeight(8)
+        sum_lay.addWidget(self._bar)
 
-        actions.addWidget(self._start)
-        actions.addWidget(self._cancel)
-        actions.addWidget(self._bar, 1)
-        action_lay.addLayout(actions)
-
-        self._stage = QLabel("Ready — Select folders and click 'Start Scan' to begin.")
+        self._stage = QLabel("Ready — Click 'Start Deep Scan' or select custom directories above.", summary_card)
         self._stage.setProperty("kind", "muted")
-        action_lay.addWidget(self._stage)
+        sum_lay.addWidget(self._stage)
 
-        root.addWidget(action_card)
+        root.addWidget(summary_card)
 
-    # ----- folder cards -----
+        scroll.setWidget(container)
+        outer.addWidget(scroll)
+
+    # ----- Folder Cards -----
     def _folder_card(self, title: str, settings_key: str, hint: str) -> Card:
         card = Card("panel")
         lay = QVBoxLayout(card)
         lay.setContentsMargins(16, 16, 16, 16)
-        lay.setSpacing(8)
+        lay.setSpacing(10)
 
+        header_row = QHBoxLayout()
         head = QLabel(title)
         f = head.font()
-        f.setPointSize(13)
+        f.setPointSize(12)
         f.setBold(True)
         head.setFont(f)
+        header_row.addWidget(head)
+        header_row.addStretch(1)
 
         sub = QLabel(hint)
         sub.setProperty("kind", "muted")
@@ -139,7 +203,7 @@ class ScanPage(QWidget):
 
         lst = QListWidget()
         lst.setAlternatingRowColors(False)
-        lst.setMinimumHeight(120)
+        lst.setMinimumHeight(110)
 
         pal = theme.current()
         if settings_key == "scan_roots":
@@ -159,17 +223,85 @@ class ScanPage(QWidget):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
         add = PillButton("+ Add Folder…")
+        add.setFixedHeight(30)
         rem = PillButton("Remove")
+        rem.setFixedHeight(30)
         add.clicked.connect(lambda: self._add_folder(lst))
         rem.clicked.connect(lambda: self._remove_folder(lst))
         btn_row.addWidget(add)
         btn_row.addWidget(rem)
         btn_row.addStretch(1)
 
+        lay.addLayout(header_row)
+        lay.addWidget(sub)
+        lay.addWidget(lst, 1)
+        lay.addLayout(btn_row)
+        return card
+
+    def _protected_vault_card(self) -> Card:
+        card = Card("panel")
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(16, 16, 16, 16)
+        lay.setSpacing(10)
+
+        head = QLabel("Protected Folders & Safe Vault")
+        f = head.font()
+        f.setPointSize(12)
+        f.setBold(True)
+        head.setFont(f)
+
+        sub = QLabel("Files in protected folders are NEVER deleted. Preserved files route to the Vault.")
+        sub.setProperty("kind", "muted")
+        sub.setWordWrap(True)
+
+        lst = QListWidget()
+        lst.setAlternatingRowColors(False)
+        lst.setMinimumHeight(80)
+        self._prot = lst
+
+        pal = theme.current()
+        saved = self.ctx.settings.get_list("protected_dirs")
+        for s in saved:
+            item = QListWidgetItem(icons.icon("shield", pal.accent), s)
+            lst.addItem(item)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        add = PillButton("+ Add Protected…")
+        add.setFixedHeight(30)
+        rem = PillButton("Remove")
+        rem.setFixedHeight(30)
+        add.clicked.connect(lambda: self._add_folder(lst))
+        rem.clicked.connect(lambda: self._remove_folder(lst))
+        btn_row.addWidget(add)
+        btn_row.addWidget(rem)
+        btn_row.addStretch(1)
+
+        # Vault destination row
+        vault_box = QHBoxLayout()
+        vault_box.setSpacing(8)
+        vault_icon = QLabel()
+        vault_icon.setPixmap(icons.icon("important", "#E2B170").pixmap(18, 18))
+
+        self._vault_info = QLabel(f"Vault: {self.ctx.settings.vault_dir}")
+        self._vault_info.setProperty("kind", "muted")
+        vf = self._vault_info.font()
+        vf.setPointSize(10)
+        self._vault_info.setFont(vf)
+
+        change_vault = PillButton("Change…")
+        change_vault.setFixedHeight(28)
+        change_vault.clicked.connect(self._pick_vault)
+
+        vault_box.addWidget(vault_icon)
+        vault_box.addWidget(self._vault_info, 1)
+        vault_box.addWidget(change_vault)
+
         lay.addWidget(head)
         lay.addWidget(sub)
         lay.addWidget(lst, 1)
         lay.addLayout(btn_row)
+        lay.addLayout(vault_box)
         return card
 
     def _add_folder(self, lst: QListWidget) -> None:
@@ -191,34 +323,21 @@ class ScanPage(QWidget):
     def _items(lst: QListWidget) -> list[str]:
         return [lst.item(i).text() for i in range(lst.count())]
 
-    # ----- important + options -----
-    def _important_row(self) -> ListRow:
-        self._vault_label = ListRow(
-            "important",
-            "Important Folder Vault",
-            f"Preserved destination for detected bills, invoices, and key files: {self.ctx.settings.vault_dir}"
-        )
-        change = PillButton("Change Vault…")
-        change.clicked.connect(self._pick_vault)
-        self._vault_label.set_trailing(change)
-        return self._vault_label
-
     def _pick_vault(self) -> None:
         d = QFileDialog.getExistingDirectory(
             self, "Choose Important folder", str(self.ctx.settings.vault_dir))
         if d:
             self.ctx.settings.vault_dir = d
-            self._vault_label.set_subtitle(
-                f"Preserved destination for detected bills, invoices, and key files: {self.ctx.settings.vault_dir}"
-            )
+            self._vault_info.setText(f"Vault: {self.ctx.settings.vault_dir}")
 
+    # ----- Options Bento Card -----
     def _options_card(self) -> Card:
         card = Card("panel")
         lay = QVBoxLayout(card)
         lay.setContentsMargins(16, 14, 16, 14)
-        lay.setSpacing(10)
+        lay.setSpacing(8)
 
-        head = QLabel("SCAN & DETECTION OPTIONS")
+        head = QLabel("SCAN & DETECTION ENGINES")
         head.setProperty("kind", "muted")
         hf = head.font()
         hf.setPointSize(9)
@@ -277,7 +396,7 @@ class ScanPage(QWidget):
         lay.addWidget(row_text)
         return card
 
-    # ----- scan -----
+    # ----- Scan Process -----
     def start_scan(self) -> None:
         roots = self._items(self._roots)
         if not roots:
@@ -323,8 +442,14 @@ class ScanPage(QWidget):
     def _on_done(self, result) -> None:
         self._reset()
         stats = presenters.scan_stats(result)
-        for card, text in zip(self._stat_cards, presenters.stat_texts(stats)):
-            card.set_value(text)
+        stat_values = [
+            f"{stats.files_scanned:,}",
+            presenters.format_bytes(stats.bytes_scanned),
+            f"{stats.duplicate_groups:,}",
+            presenters.format_bytes(stats.reclaimable_bytes),
+        ]
+        for card, val in zip(self._stat_cards, stat_values):
+            card.set_value(val)
         self._stage.setText(presenters.done_text(stats))
         self.result_ready.emit(result)
 
