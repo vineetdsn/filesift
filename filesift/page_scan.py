@@ -58,7 +58,7 @@ class ScanPage(QWidget):
         page_title = QLabel("Storage Overview & Sifter")
         ptf = page_title.font()
         ptf.setPointSize(19)
-        ptf.setBold(True)
+        ptf.setWeight(QFont.Weight.DemiBold)
         page_title.setFont(ptf)
 
         page_desc = QLabel("Intelligent duplicate detection, photo similarity hashing, and storage reclamation.")

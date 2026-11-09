@@ -68,17 +68,17 @@ class StatCard(Card):
         self._value = QLabel(presenters.EM_DASH)
         f = self._value.font()
         f.setPointSize(theme.FONT_STAT_PT)
-        f.setWeight(QFont.Weight.Bold)
+        f.setWeight(QFont.Weight.DemiBold)
         self._value.setFont(f)
         self._value.setProperty("kind", "card-text")
 
-        # Color highlight: brushed champagne gold & warm copper
+        # Color highlight: soft brushed champagne gold & warm copper
         if "reclaim" in label.lower() or "safe" in label.lower():
-            self._value.setStyleSheet("color: #E2B170; font-weight: bold;")
+            self._value.setStyleSheet("color: #E2B170; font-weight: 600;")
         elif "duplicate" in label.lower():
-            self._value.setStyleSheet("color: #D97706; font-weight: bold;")
+            self._value.setStyleSheet("color: #D97706; font-weight: 600;")
         else:
-            self._value.setStyleSheet("color: #F4F4F5; font-weight: bold;")
+            self._value.setStyleSheet("color: #F0EFEA; font-weight: 600;")
 
         lay.addWidget(self._cap)
         lay.addWidget(self._value)
@@ -326,6 +326,68 @@ class NavButton(QToolButton):
             p.drawText(QRect(bx, by, bw, bh), Qt.AlignmentFlag.AlignCenter, text)
 
 
+class ThemeSegmentedPill(QWidget):
+    """Dual-segment pill switcher: [ ☀️ Light | 🌙 Dark ] with active segment highlight."""
+    theme_requested = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(190, 36)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._mode = theme.current().name
+
+    def set_mode(self, mode: str) -> None:
+        self._mode = mode
+        self.update()
+
+    def mousePressEvent(self, e) -> None:
+        if e.button() == Qt.MouseButton.LeftButton:
+            new_mode = "light" if e.pos().x() < self.width() / 2 else "dark"
+            if new_mode != self._mode:
+                self._mode = new_mode
+                self.theme_requested.emit(self._mode)
+                self.update()
+
+    def paintEvent(self, _e) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pal = theme.current()
+        w = float(self.width())
+        h = float(self.height())
+        r = h / 2.0
+
+        # Outer rounded pill track
+        p.setPen(QPen(QColor(pal.panel_border), 1))
+        p.setBrush(QColor(pal.bg))
+        p.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), r, r)
+
+        seg_w = (w - 6) / 2.0
+        seg_h = h - 6
+        active_x = 3.0 if self._mode == "light" else (3.0 + seg_w)
+
+        # Active segment pill with champagne border
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(pal.card_top))
+        p.drawRoundedRect(QRectF(active_x, 3.0, seg_w, seg_h), seg_h / 2.0, seg_h / 2.0)
+        p.setPen(QPen(QColor(pal.accent), 1))
+        p.drawRoundedRect(QRectF(active_x, 3.0, seg_w, seg_h), seg_h / 2.0, seg_h / 2.0)
+
+        f = self.font()
+        f.setPointSize(9)
+        f.setBold(True)
+        p.setFont(f)
+
+        # Light label
+        light_col = QColor(pal.text) if self._mode == "light" else QColor(pal.text_muted)
+        p.setPen(light_col)
+        p.drawText(QRectF(3.0, 3.0, seg_w, seg_h), Qt.AlignmentFlag.AlignCenter, "☀️ Light")
+
+        # Dark label
+        dark_col = QColor(pal.text) if self._mode == "dark" else QColor(pal.text_muted)
+        p.setPen(dark_col)
+        p.drawText(QRectF(3.0 + seg_w, 3.0, seg_w, seg_h), Qt.AlignmentFlag.AlignCenter, "🌙 Dark")
+
+
 class Sidebar(QFrame):
     """Full Scandinavian minimalist sidebar with brand header and theme switcher."""
     page_requested = Signal(str)
@@ -351,7 +413,7 @@ class Sidebar(QFrame):
 
         logo_lbl = QLabel()
         logo_lbl.setFixedSize(26, 26)
-        logo_lbl.setPixmap(icons.icon("folder", "#E2B170").pixmap(QSize(24, 24)))
+        logo_lbl.setPixmap(icons.icon("brand", "#E2B170").pixmap(QSize(24, 24)))
 
         title_box = QVBoxLayout()
         title_box.setContentsMargins(0, 0, 0, 0)
@@ -399,28 +461,10 @@ class Sidebar(QFrame):
 
         lay.addStretch(1)
 
-        # Quick Theme Toggle Pill
-        self._theme_btn = QPushButton("🌙 Dark Mode")
-        self._theme_btn.setFixedSize(190, 36)
-        self._theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._theme_btn.setStyleSheet("""
-            QPushButton {
-                background: #1B1B20;
-                color: #A1A1AA;
-                border: 1px solid #282830;
-                border-radius: 8px;
-                font-size: 11px;
-                font-weight: 500;
-                padding: 6px 12px;
-            }
-            QPushButton:hover {
-                background: #232329;
-                color: #F4F4F5;
-                border-color: #383842;
-            }
-        """)
-        self._theme_btn.clicked.connect(self._toggle_theme)
-        lay.addWidget(self._theme_btn)
+        # Dual-segment theme switcher pill [ ☀️ Light | 🌙 Dark ]
+        self._theme_pill = ThemeSegmentedPill(self)
+        self._theme_pill.theme_requested.connect(self._on_theme_changed)
+        lay.addWidget(self._theme_pill)
 
     def paintEvent(self, _e) -> None:
         p = QPainter(self)
@@ -431,14 +475,11 @@ class Sidebar(QFrame):
         p.setPen(QPen(QColor(pal.panel_border), 1))
         p.drawLine(self.width() - 1, 0, self.width() - 1, self.height())
 
-    def _toggle_theme(self) -> None:
+    def _on_theme_changed(self, mode: str) -> None:
         app = QApplication.instance()
         if app:
-            new_pal = theme.toggle_theme(app)
-            if new_pal.name == "dark":
-                self._theme_btn.setText("🌙 Dark Mode")
-            else:
-                self._theme_btn.setText("☀️ Light Mode")
+            theme.apply_theme(app, mode)
+            self._theme_pill.set_mode(mode)
             for widget in app.topLevelWidgets():
                 widget.update()
 
@@ -617,23 +658,23 @@ class CategoryBentoCard(Card):
 
     def __init__(self, icon_name: str, title: str, stat_val: str, subtitle: str, checked: bool = True, parent=None):
         super().__init__("content", parent)
-        self.setMinimumHeight(105)
+        self.setMinimumHeight(114)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(16, 14, 16, 14)
-        lay.setSpacing(4)
+        lay.setContentsMargins(18, 16, 18, 16)
+        lay.setSpacing(5)
 
         top = QHBoxLayout()
-        top.setSpacing(8)
+        top.setSpacing(10)
 
         self._icon = QLabel()
         self._icon.setPixmap(icons.icon(icon_name, "#E2B170").pixmap(QSize(20, 20)))
 
         self._title = QLabel(title)
         tf = self._title.font()
-        tf.setPointSize(11)
-        tf.setBold(True)
+        tf.setPointSize(12)
+        tf.setWeight(QFont.Weight.DemiBold)
         self._title.setFont(tf)
 
         self._toggle = ToggleSwitch()
@@ -647,10 +688,10 @@ class CategoryBentoCard(Card):
 
         self._stat = QLabel(stat_val)
         sf = self._stat.font()
-        sf.setPointSize(18)
-        sf.setBold(True)
+        sf.setPointSize(19)
+        sf.setWeight(QFont.Weight.DemiBold)
         self._stat.setFont(sf)
-        self._stat.setStyleSheet("color: #F4F4F5;")
+        self._stat.setProperty("kind", "card-text")
 
         self._sub = QLabel(subtitle)
         self._sub.setProperty("kind", "muted")
