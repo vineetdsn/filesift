@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (QColor, QFont, QIcon, QImageReader, QLinearGradient,
-                           QPainter, QPen, QPixmap)
+                           QPainter, QPainterPath, QPen, QPixmap)
 from PySide6.QtWidgets import (QAbstractButton, QApplication, QFrame, QHBoxLayout,
                                QLabel, QPlainTextEdit, QPushButton, QSizePolicy,
                                QToolButton, QVBoxLayout, QWidget)
@@ -345,21 +345,25 @@ class Sidebar(QFrame):
         brand_box = QWidget()
         brand_box.setFixedWidth(190)
         brand_lay = QHBoxLayout(brand_box)
-        brand_lay.setContentsMargins(4, 0, 4, 16)
-        brand_lay.setSpacing(10)
+        brand_lay.setContentsMargins(8, 0, 8, 16)
+        brand_lay.setSpacing(12)
+        brand_lay.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         logo_lbl = QLabel()
-        logo_lbl.setPixmap(icons.icon("scan", "#E2B170").pixmap(QSize(26, 26)))
+        logo_lbl.setFixedSize(26, 26)
+        logo_lbl.setPixmap(icons.icon("folder", "#E2B170").pixmap(QSize(24, 24)))
 
         title_box = QVBoxLayout()
+        title_box.setContentsMargins(0, 0, 0, 0)
         title_box.setSpacing(1)
+        title_box.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         title_lbl = QLabel("FileSift")
         tf = title_lbl.font()
         tf.setPointSize(15)
         tf.setBold(True)
         title_lbl.setFont(tf)
 
-        sub_lbl = QLabel("Storage Sifter")
+        sub_lbl = QLabel("Storage Optimizer")
         sub_lbl.setProperty("kind", "muted")
         sf = sub_lbl.font()
         sf.setPointSize(9)
@@ -368,12 +372,24 @@ class Sidebar(QFrame):
         title_box.addWidget(title_lbl)
         title_box.addWidget(sub_lbl)
 
-        brand_lay.addWidget(logo_lbl)
+        brand_lay.addWidget(logo_lbl, 0, Qt.AlignmentFlag.AlignVCenter)
         brand_lay.addLayout(title_box)
         lay.addWidget(brand_box)
 
+        # Section Label
+        section_lbl = QLabel("TOOLS & STORAGE")
+        section_lbl.setFixedWidth(180)
+        section_lbl.setProperty("kind", "muted")
+        sec_f = section_lbl.font()
+        sec_f.setPointSize(8)
+        sec_f.setBold(True)
+        sec_f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.8)
+        section_lbl.setFont(sec_f)
+        section_lbl.setStyleSheet("color: #71717A; padding: 4px 6px;")
+        lay.addWidget(section_lbl)
+
         # Navigation Buttons
-        self._scan = NavButton("scan", "scan", "Scan & Folders")
+        self._scan = NavButton("scan", "scan", "Scan & Overview")
         self._dup = NavButton("duplicates", "duplicates", "Duplicates")
         self._clean = NavButton("cleanup", "cleanup", "Clean Up")
 
@@ -387,6 +403,22 @@ class Sidebar(QFrame):
         self._theme_btn = QPushButton("🌙 Dark Mode")
         self._theme_btn.setFixedSize(190, 36)
         self._theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._theme_btn.setStyleSheet("""
+            QPushButton {
+                background: #1B1B20;
+                color: #A1A1AA;
+                border: 1px solid #282830;
+                border-radius: 8px;
+                font-size: 11px;
+                font-weight: 500;
+                padding: 6px 12px;
+            }
+            QPushButton:hover {
+                background: #232329;
+                color: #F4F4F5;
+                border-color: #383842;
+            }
+        """)
         self._theme_btn.clicked.connect(self._toggle_theme)
         lay.addWidget(self._theme_btn)
 
@@ -467,3 +499,171 @@ class PreviewPanel(Card):
         else:
             self._image.setPixmap(pm)
         self._details.setPlainText(presenters.preview_details(fi))
+
+
+class StorageGauge(QWidget):
+    """Segmented horizontal storage bar with rounded corners."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(10)
+        self._ratios = [0.24, 0.14, 0.08, 0.04]  # sys, media, docs, dups
+
+    def paintEvent(self, _e) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pal = theme.current()
+        w = float(self.width())
+        h = float(self.height())
+        r = 5.0
+
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(pal.card_bottom))
+        p.drawRoundedRect(QRectF(0, 0, w, h), r, r)
+
+        colors = [
+            QColor("#3E3E48"),
+            QColor(pal.accent),
+            QColor(pal.success),
+            QColor(pal.danger),
+        ]
+
+        x = 0.0
+        clip_path = QPainterPath()
+        clip_path.addRoundedRect(QRectF(0, 0, w, h), r, r)
+        p.setClipPath(clip_path)
+
+        for ratio, col in zip(self._ratios, colors):
+            seg_w = max(4.0, w * ratio)
+            p.setBrush(col)
+            p.drawRect(QRectF(x, 0, seg_w - 2.0, h))
+            x += seg_w
+
+
+class DiskUsageCard(Card):
+    """Nordic Zen disk capacity & storage visualizer."""
+
+    def __init__(self, parent=None):
+        super().__init__("panel", parent)
+        import shutil
+        from pathlib import Path
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(18, 16, 18, 16)
+        lay.setSpacing(10)
+
+        root_dir = Path.home().anchor or "C:\\"
+        try:
+            usage = shutil.disk_usage(root_dir)
+            total_gb = usage.total / (1024 ** 3)
+            used_gb = usage.used / (1024 ** 3)
+            free_gb = usage.free / (1024 ** 3)
+        except Exception:
+            total_gb, used_gb, free_gb = 1000.0, 420.0, 580.0
+
+        top_row = QHBoxLayout()
+        top_row.setSpacing(12)
+
+        icon_lbl = QLabel()
+        icon_lbl.setPixmap(icons.icon("disk", "#E2B170").pixmap(QSize(22, 22)))
+
+        info_box = QVBoxLayout()
+        info_box.setSpacing(1)
+        clean_root = root_dir.rstrip(r"\/")
+        title_lbl = QLabel(f"Local Disk ({clean_root}) — {used_gb:.1f} GB of {total_gb:.1f} GB Used")
+        tf = title_lbl.font()
+        tf.setBold(True)
+        tf.setPointSize(12)
+        title_lbl.setFont(tf)
+
+        sub_lbl = QLabel(f"{free_gb:.1f} GB Available storage • Solid State Drive")
+        sub_lbl.setProperty("kind", "muted")
+        info_box.addWidget(title_lbl)
+        info_box.addWidget(sub_lbl)
+
+        badge_lbl = QLabel("● Ready to Sift")
+        badge_lbl.setStyleSheet(
+            "color: #E2B170; background: #222228; border: 1px solid #3A3A44; border-radius: 10px; padding: 3px 10px; font-size: 11px; font-weight: bold;"
+        )
+
+        top_row.addWidget(icon_lbl)
+        top_row.addLayout(info_box, 1)
+        top_row.addWidget(badge_lbl)
+        lay.addLayout(top_row)
+
+        self._gauge = StorageGauge()
+        lay.addWidget(self._gauge)
+
+        legend = QHBoxLayout()
+        legend.setSpacing(18)
+        items = [
+            ("#3E3E48", "System & Apps"),
+            ("#E2B170", "Photos & Media"),
+            ("#98C379", "Documents"),
+            ("#E06C75", "Caches & Dups"),
+            ("#6A6A76", f"Free ({free_gb:.0f} GB)"),
+        ]
+        for col_hex, name in items:
+            dot_lbl = QLabel(f"● {name}")
+            dot_lbl.setStyleSheet(f"color: {col_hex}; font-size: 11px;")
+            legend.addWidget(dot_lbl)
+        legend.addStretch(1)
+        lay.addLayout(legend)
+
+
+class CategoryBentoCard(Card):
+    """Concept 6 Bento Quick Cleaner Card with Apple-style toggle and large metric."""
+    toggled = Signal(bool)
+
+    def __init__(self, icon_name: str, title: str, stat_val: str, subtitle: str, checked: bool = True, parent=None):
+        super().__init__("content", parent)
+        self.setMinimumHeight(105)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(4)
+
+        top = QHBoxLayout()
+        top.setSpacing(8)
+
+        self._icon = QLabel()
+        self._icon.setPixmap(icons.icon(icon_name, "#E2B170").pixmap(QSize(20, 20)))
+
+        self._title = QLabel(title)
+        tf = self._title.font()
+        tf.setPointSize(11)
+        tf.setBold(True)
+        self._title.setFont(tf)
+
+        self._toggle = ToggleSwitch()
+        self._toggle.setChecked(checked)
+        self._toggle.toggled.connect(self.toggled.emit)
+
+        top.addWidget(self._icon)
+        top.addWidget(self._title, 1)
+        top.addWidget(self._toggle)
+        lay.addLayout(top)
+
+        self._stat = QLabel(stat_val)
+        sf = self._stat.font()
+        sf.setPointSize(18)
+        sf.setBold(True)
+        self._stat.setFont(sf)
+        self._stat.setStyleSheet("color: #F4F4F5;")
+
+        self._sub = QLabel(subtitle)
+        self._sub.setProperty("kind", "muted")
+        sub_f = self._sub.font()
+        sub_f.setPointSize(10)
+        self._sub.setFont(sub_f)
+
+        lay.addWidget(self._stat)
+        lay.addWidget(self._sub)
+
+    def is_checked(self) -> bool:
+        return self._toggle.isChecked()
+
+    def set_stat(self, val: str) -> None:
+        self._stat.setText(val)
+
