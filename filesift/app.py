@@ -20,7 +20,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.ctx = ctx
         self.setWindowTitle("FileSift — Storage Optimizer")
-        self.setWindowIcon(icons.icon("scan", "#E2B170"))
+        self.setWindowIcon(icons.icon("brand", "#E2B170"))
         self.resize(1280, 820)
         self.setMinimumSize(1020, 680)
 

@@ -38,7 +38,22 @@ class _LineIconEngine(QIconEngine):
         painter.setBrush(Qt.BrushStyle.NoBrush)
 
         n = self._name
-        if n == "scan":
+        if n in ("brand", "filesift"):
+            # Bespoke FileSift Emblem: Soft Squircle & Sifting Prism
+            r = QRectF(2.5 * sx, 2.5 * sy, 19 * sx, 19 * sy)
+            painter.drawRoundedRect(r, 6 * sx, 6 * sy)
+
+            # Precision Sifter Blades
+            painter.drawLine(QPointF(6.5 * sx, 8 * sy), QPointF(17.5 * sx, 8 * sy))
+            painter.drawLine(QPointF(8.5 * sx, 11.5 * sy), QPointF(15.5 * sx, 11.5 * sy))
+            painter.drawLine(QPointF(6.5 * sx, 8 * sy), QPointF(10 * sx, 15 * sy))
+            painter.drawLine(QPointF(17.5 * sx, 8 * sy), QPointF(14 * sx, 15 * sy))
+
+            # Central Sift Jewel Sparkle
+            painter.drawLine(QPointF(12 * sx, 14.5 * sy), QPointF(12 * sx, 18.5 * sy))
+            painter.drawLine(QPointF(10 * sx, 16.5 * sy), QPointF(14 * sx, 16.5 * sy))
+
+        elif n == "scan":
             # Delicate magnifying lens
             painter.drawEllipse(QRectF(4.5 * sx, 4.5 * sy, 10 * sx, 10 * sy))
             painter.drawLine(QPointF(12 * sx, 12 * sy), QPointF(19 * sx, 19 * sy))
