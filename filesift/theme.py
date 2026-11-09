@@ -155,7 +155,6 @@ def build_stylesheet(p: Palette) -> str:
         border-radius: {RADIUS_CONTROL}px;
         padding: 7px 16px;
         font-weight: 500;
-        cursor: pointer;
     }}
     QPushButton:hover {{
         background: {p.nav_hover};
@@ -176,7 +175,6 @@ def build_stylesheet(p: Palette) -> str:
         border: none;
         color: {p.text_muted};
         border-radius: {RADIUS_CONTROL}px;
-        cursor: pointer;
     }}
     QToolButton:hover {{
         background: {p.nav_hover};
