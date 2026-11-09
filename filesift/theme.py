@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-RADIUS_CARD = 14
-RADIUS_CONTROL = 8
+RADIUS_CARD = 18
+RADIUS_CONTROL = 10
 PILL_H = 38
 PILL_RADIUS = 19
 SIDEBAR_W = 210
@@ -13,6 +13,7 @@ FONT_STAT_PT = 26
 FONT_STAT_WEIGHT = 600
 
 FONT_FAMILIES = (
+    "Plus Jakarta Sans",
     "Inter",
     "Segoe UI Variable Text",
     "Segoe UI",
@@ -46,25 +47,25 @@ class Palette:
     copper: str = "#D97706"
 
 
-# Nordic Zen Minimalist (Warm Charcoal & Brushed Champagne Gold)
+# Nordic Zen Minimalist (Soft Warm Charcoal & Brushed Champagne Gold)
 DARK = Palette(
     name="dark",
-    bg="#131316",
-    panel="#1B1B20",
-    panel_border="#282830",
-    card_top="#212128",
-    card_bottom="#16161A",
-    text="#F4F4F5",
-    text_muted="#A1A1AA",
-    card_text="#F4F4F5",
+    bg="#151419",
+    panel="#1C1B22",
+    panel_border="#282730",
+    card_top="#24232C",
+    card_bottom="#1A1921",
+    text="#F0EFEA",
+    text_muted="#9B9AA5",
+    card_text="#F0EFEA",
     accent="#E2B170",
-    on_accent="#131316",
+    on_accent="#151419",
     accent_glow="#E2B170",
-    input_border="#2B2B33",
+    input_border="#2E2D38",
     danger="#E06C75",
     shadow="#000000",
     nav_active="#E2B170",
-    nav_hover="#222228",
+    nav_hover="#23222B",
     success="#98C379",
     warning="#E5C07B",
     copper="#D97706",
@@ -112,7 +113,7 @@ def build_stylesheet(p: Palette) -> str:
         background: {p.bg};
         color: {p.text};
         font-size: 13px;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     }}
     QMainWindow, QDialog {{
         background: {p.bg};
@@ -309,9 +310,11 @@ def build_stylesheet(p: Palette) -> str:
 def pick_font(app) -> None:
     from pathlib import Path
     from PySide6.QtGui import QFont, QFontDatabase
-    font_file = Path(__file__).parent / "fonts" / "Inter.ttf"
-    if font_file.exists():
-        QFontDatabase.addApplicationFont(str(font_file))
+    fonts_dir = Path(__file__).parent / "fonts"
+    for font_name in ("PlusJakartaSans.ttf", "Inter.ttf"):
+        font_file = fonts_dir / font_name
+        if font_file.exists():
+            QFontDatabase.addApplicationFont(str(font_file))
     available = set(QFontDatabase.families())
     for fam in FONT_FAMILIES:
         if fam in available:
