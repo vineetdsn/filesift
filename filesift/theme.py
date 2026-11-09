@@ -13,10 +13,9 @@ FONT_STAT_PT = 26
 FONT_STAT_WEIGHT = 600
 
 FONT_FAMILIES = (
-    "Segoe UI Variable Display",
+    "Inter",
     "Segoe UI Variable Text",
     "Segoe UI",
-    "Inter",
     "SF Pro Display",
     "Helvetica Neue",
     "Arial",
@@ -56,7 +55,7 @@ DARK = Palette(
     card_top="#212128",
     card_bottom="#16161A",
     text="#F4F4F5",
-    text_muted="#8E8E9A",
+    text_muted="#A1A1AA",
     card_text="#F4F4F5",
     accent="#E2B170",
     on_accent="#131316",
@@ -113,7 +112,7 @@ def build_stylesheet(p: Palette) -> str:
         background: {p.bg};
         color: {p.text};
         font-size: 13px;
-        font-family: 'Segoe UI Variable Text', 'Segoe UI', Inter, system-ui, sans-serif;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     }}
     QMainWindow, QDialog {{
         background: {p.bg};
@@ -308,15 +307,19 @@ def build_stylesheet(p: Palette) -> str:
 
 
 def pick_font(app) -> None:
+    from pathlib import Path
     from PySide6.QtGui import QFont, QFontDatabase
+    font_file = Path(__file__).parent / "fonts" / "Inter.ttf"
+    if font_file.exists():
+        QFontDatabase.addApplicationFont(str(font_file))
     available = set(QFontDatabase.families())
     for fam in FONT_FAMILIES:
         if fam in available:
-            f = QFont(fam)
+            f = QFont(fam, 10)
             f.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
             app.setFont(f)
             return
-    app.setFont(QFont("Segoe UI"))
+    app.setFont(QFont("Segoe UI", 10))
 
 
 def apply_theme(app, name: str) -> Palette:
