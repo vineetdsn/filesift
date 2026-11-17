@@ -1,6 +1,8 @@
 """Whisper-thin Swiss vector glyphs drawn cleanly in code — Nordic Zen style."""
 from __future__ import annotations
 
+import math
+
 from PySide6.QtCore import QPointF, QRect, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QIcon, QIconEngine, QPainter, QPainterPath, QPen, QPixmap, QPolygonF
 
@@ -182,6 +184,55 @@ class _LineIconEngine(QIconEngine):
             painter.drawEllipse(QRectF(5 * sx, 11 * sy, 2 * sx, 2 * sy))
             painter.drawEllipse(QRectF(11 * sx, 11 * sy, 2 * sx, 2 * sy))
             painter.drawEllipse(QRectF(17 * sx, 11 * sy, 2 * sx, 2 * sy))
+
+        elif n in ("settings", "gear"):
+            # Minimalist precision gear
+            painter.drawEllipse(QRectF(8 * sx, 8 * sy, 8 * sx, 8 * sy))
+            for ang in range(0, 360, 45):
+                rad = ang * 3.14159265 / 180.0
+                x1 = 12 * sx + 5.5 * sx * math.cos(rad)
+                y1 = 12 * sy + 5.5 * sy * math.sin(rad)
+                x2 = 12 * sx + 8.5 * sx * math.cos(rad)
+                y2 = 12 * sy + 8.5 * sy * math.sin(rad)
+                painter.drawLine(QPointF(x1, y1), QPointF(x2, y2))
+
+        elif n in ("cards", "card", "home"):
+            # Minimalist home / card icon
+            path = QPainterPath()
+            path.moveTo(4.5 * sx, 10 * sy)
+            path.lineTo(12 * sx, 4.5 * sy)
+            path.lineTo(19.5 * sx, 10 * sy)
+            path.lineTo(19.5 * sx, 19.5 * sy)
+            path.lineTo(4.5 * sx, 19.5 * sy)
+            path.closeSubpath()
+            painter.drawPath(path)
+
+        elif n in ("download", "installer"):
+            # Minimalist tray + downward arrow (Concept 6 3rd card icon)
+            path = QPainterPath()
+            path.moveTo(4.5 * sx, 13 * sy)
+            path.lineTo(4.5 * sx, 19.5 * sy)
+            path.lineTo(19.5 * sx, 19.5 * sy)
+            path.lineTo(19.5 * sx, 13 * sy)
+            painter.drawPath(path)
+            painter.drawLine(QPointF(12 * sx, 4.5 * sy), QPointF(12 * sx, 15 * sy))
+            painter.drawLine(QPointF(8.5 * sx, 11.5 * sy), QPointF(12 * sx, 15 * sy))
+            painter.drawLine(QPointF(15.5 * sx, 11.5 * sy), QPointF(12 * sx, 15 * sy))
+
+        elif n in ("app", "xcode"):
+            # Stylized Xcode / drafting compass 'A' (Concept 6 1st card icon)
+            painter.drawLine(QPointF(12 * sx, 5 * sy), QPointF(6 * sx, 19 * sy))
+            painter.drawLine(QPointF(12 * sx, 5 * sy), QPointF(18 * sx, 19 * sy))
+            painter.drawLine(QPointF(8 * sx, 14 * sy), QPointF(16 * sx, 14 * sy))
+            painter.drawLine(QPointF(10 * sx, 12 * sy), QPointF(14 * sx, 12 * sy))
+
+        elif n in ("browser", "chrome"):
+            # Minimalist concentric aperture wheel (Concept 6 2nd card icon)
+            painter.drawEllipse(QRectF(4.5 * sx, 4.5 * sy, 15 * sx, 15 * sy))
+            painter.drawEllipse(QRectF(9 * sx, 9 * sy, 6 * sx, 6 * sy))
+            painter.drawLine(QPointF(12 * sx, 4.5 * sy), QPointF(17 * sx, 13 * sy))
+            painter.drawLine(QPointF(17.5 * sx, 14 * sy), QPointF(7 * sx, 16.5 * sy))
+            painter.drawLine(QPointF(6 * sx, 14 * sy), QPointF(11.5 * sx, 5 * sy))
 
         elif n == "moon":
             path = QPainterPath()
