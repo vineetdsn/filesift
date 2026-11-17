@@ -1,7 +1,7 @@
 """Reusable Nordic Zen widgets: architectural cards, champagne gold buttons, Swiss sidebar — UI/UX Pro Max."""
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (QColor, QFont, QIcon, QImageReader, QLinearGradient,
                            QPainter, QPainterPath, QPen, QPixmap)
 from PySide6.QtWidgets import (QAbstractButton, QApplication, QFrame, QHBoxLayout,
@@ -304,6 +304,12 @@ class NavButton(QToolButton):
         text_rect = QRect(44, 0, w - 50, h)
         p.drawText(text_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self._label)
 
+        # Trailing indicator dot (Concept 6 style)
+        if self._active:
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(pal.accent))
+            p.drawEllipse(QPointF(w - 20, h / 2.0), 3.0, 3.0)
+
         # Champagne micro-badge
         text = presenters.format_badge(self._badge) if self._badge else None
         if text:
@@ -388,6 +394,27 @@ class ThemeSegmentedPill(QWidget):
         p.drawText(QRectF(3.0 + seg_w, 3.0, seg_w, seg_h), Qt.AlignmentFlag.AlignCenter, "🌙 Dark")
 
 
+class WindowDots(QWidget):
+    """Refined macOS/Nordic window traffic light dots."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(18)
+        self.setFixedWidth(64)
+
+    def paintEvent(self, _e) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        colors = [QColor("#FF5F56"), QColor("#FFBD2E"), QColor("#27C93F")]
+        x = 6.0
+        y = 9.0
+        for col in colors:
+            p.setBrush(col)
+            p.drawEllipse(QPointF(x, y), 5.0, 5.0)
+            x += 16.0
+
+
 class Sidebar(QFrame):
     """Full Scandinavian minimalist sidebar with brand header and theme switcher."""
     page_requested = Signal(str)
@@ -399,21 +426,30 @@ class Sidebar(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(10, 20, 10, 16)
+        lay.setContentsMargins(10, 16, 10, 16)
         lay.setSpacing(6)
         lay.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+
+        # Window traffic lights (Concept 6 header)
+        dots_box = QWidget()
+        dots_box.setFixedWidth(190)
+        dh = QHBoxLayout(dots_box)
+        dh.setContentsMargins(6, 0, 0, 8)
+        dh.addWidget(WindowDots(dots_box))
+        dh.addStretch(1)
+        lay.addWidget(dots_box)
 
         # App Brand Header
         brand_box = QWidget()
         brand_box.setFixedWidth(190)
         brand_lay = QHBoxLayout(brand_box)
-        brand_lay.setContentsMargins(8, 0, 8, 16)
-        brand_lay.setSpacing(12)
+        brand_lay.setContentsMargins(6, 0, 6, 14)
+        brand_lay.setSpacing(10)
         brand_lay.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         logo_lbl = QLabel()
         logo_lbl.setFixedSize(26, 26)
-        logo_lbl.setPixmap(icons.icon("brand", "#E2B170").pixmap(QSize(24, 24)))
+        logo_lbl.setPixmap(icons.icon("brand", "#E0A96D").pixmap(QSize(24, 24)))
 
         title_box = QVBoxLayout()
         title_box.setContentsMargins(0, 0, 0, 0)
@@ -425,7 +461,7 @@ class Sidebar(QFrame):
         tf.setBold(True)
         title_lbl.setFont(tf)
 
-        sub_lbl = QLabel("Storage Optimizer")
+        sub_lbl = QLabel("Storage Sifter")
         sub_lbl.setProperty("kind", "muted")
         sf = sub_lbl.font()
         sf.setPointSize(9)
@@ -438,28 +474,41 @@ class Sidebar(QFrame):
         brand_lay.addLayout(title_box)
         lay.addWidget(brand_box)
 
-        # Section Label
-        section_lbl = QLabel("TOOLS & STORAGE")
+        # Primary Navigation (Concept 6)
+        self._scan = NavButton("scan", "cards", "File cards")
+        self._storage = NavButton("scan", "disk", "Storage")
+        self._recents = NavButton("scan", "scan", "Recents")
+
+        for b in (self._scan, self._storage, self._recents):
+            b.requested.connect(self.page_requested)
+            lay.addWidget(b)
+
+        # Section Header: PREMIUMS
+        section_lbl = QLabel("PREMIUMS")
         section_lbl.setFixedWidth(180)
         section_lbl.setProperty("kind", "muted")
         sec_f = section_lbl.font()
         sec_f.setPointSize(8)
         sec_f.setBold(True)
-        sec_f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.8)
+        sec_f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.2)
         section_lbl.setFont(sec_f)
-        section_lbl.setStyleSheet("color: #71717A; padding: 4px 6px;")
+        section_lbl.setStyleSheet("color: #6B6A78; padding: 12px 8px 4px 8px;")
         lay.addWidget(section_lbl)
 
-        # Navigation Buttons
-        self._scan = NavButton("scan", "scan", "Scan & Overview")
+        # Organization & Analysis items
         self._dup = NavButton("duplicates", "duplicates", "Duplicates")
-        self._clean = NavButton("cleanup", "cleanup", "Clean Up")
+        self._clean = NavButton("cleanup", "cleanup", "Cleanup")
 
-        for b in (self._scan, self._dup, self._clean):
+        for b in (self._dup, self._clean):
             b.requested.connect(self.page_requested)
             lay.addWidget(b)
 
         lay.addStretch(1)
+
+        # Settings nav button
+        self._settings = NavButton("scan", "settings", "Settings")
+        self._settings.requested.connect(self.page_requested)
+        lay.addWidget(self._settings)
 
         # Dual-segment theme switcher pill [ ☀️ Light | 🌙 Dark ]
         self._theme_pill = ThemeSegmentedPill(self)
@@ -656,51 +705,47 @@ class CategoryBentoCard(Card):
     """Concept 6 Bento Quick Cleaner Card with Apple-style toggle and large metric."""
     toggled = Signal(bool)
 
-    def __init__(self, icon_name: str, title: str, stat_val: str, subtitle: str, checked: bool = True, parent=None):
+    def __init__(self, icon_name: str, title: str, stat_val: str, subtitle: str = "", checked: bool = True, parent=None):
         super().__init__("content", parent)
-        self.setMinimumHeight(114)
+        self.setFixedHeight(102)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(18, 16, 18, 16)
-        lay.setSpacing(5)
+        lay.setContentsMargins(18, 14, 18, 14)
+        lay.setSpacing(6)
 
         top = QHBoxLayout()
+        top.setContentsMargins(0, 0, 0, 0)
         top.setSpacing(10)
 
         self._icon = QLabel()
-        self._icon.setPixmap(icons.icon(icon_name, "#E2B170").pixmap(QSize(20, 20)))
-
-        self._title = QLabel(title)
-        tf = self._title.font()
-        tf.setPointSize(12)
-        tf.setWeight(QFont.Weight.DemiBold)
-        self._title.setFont(tf)
+        self._icon.setPixmap(icons.icon(icon_name, "#E0A96D").pixmap(QSize(22, 22)))
 
         self._toggle = ToggleSwitch()
         self._toggle.setChecked(checked)
         self._toggle.toggled.connect(self.toggled.emit)
 
         top.addWidget(self._icon)
-        top.addWidget(self._title, 1)
+        top.addStretch(1)
         top.addWidget(self._toggle)
         lay.addLayout(top)
+
+        self._title = QLabel(title)
+        tf = self._title.font()
+        tf.setPointSize(12)
+        tf.setWeight(QFont.Weight.Medium)
+        self._title.setFont(tf)
+        self._title.setProperty("kind", "card-text")
 
         self._stat = QLabel(stat_val)
         sf = self._stat.font()
         sf.setPointSize(19)
         sf.setWeight(QFont.Weight.DemiBold)
         self._stat.setFont(sf)
-        self._stat.setProperty("kind", "card-text")
+        self._stat.setStyleSheet("color: #FFFFFF;")
 
-        self._sub = QLabel(subtitle)
-        self._sub.setProperty("kind", "muted")
-        sub_f = self._sub.font()
-        sub_f.setPointSize(10)
-        self._sub.setFont(sub_f)
-
+        lay.addWidget(self._title)
         lay.addWidget(self._stat)
-        lay.addWidget(self._sub)
 
     def is_checked(self) -> bool:
         return self._toggle.isChecked()
