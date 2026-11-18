@@ -35,17 +35,32 @@ class Card(QFrame):
     def paintEvent(self, _e) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         pal = theme.current()
-        r = self.rect().adjusted(1, 1, -1, -1)
-        p.setPen(QPen(QColor(pal.panel_border), 1))
-        if self._kind == "panel":
-            p.setBrush(QColor(pal.panel))
-        else:  # content / elevated
-            grad = QLinearGradient(0, 0, 0, max(1, r.height()))
-            grad.setColorAt(0.0, QColor(pal.card_top))
-            grad.setColorAt(1.0, QColor(pal.card_bottom))
-            p.setBrush(grad)
-        p.drawRoundedRect(r, theme.RADIUS_CARD, theme.RADIUS_CARD)
+        r = QRectF(0.5, 0.5, float(self.width()) - 1.0, float(self.height()) - 1.0)
+        rad = float(theme.RADIUS_CARD)
+
+        if pal.name == "light":
+            border_col = QColor(24, 24, 27, 24)
+            p.setPen(QPen(border_col, 1.0))
+            if self._kind == "panel":
+                p.setBrush(QColor("#FFFFFF"))
+            else:
+                grad = QLinearGradient(0, 0, 0, float(self.height()))
+                grad.setColorAt(0.0, QColor("#FFFFFF"))
+                grad.setColorAt(1.0, QColor("#F8F8FB"))
+                p.setBrush(grad)
+        else:
+            border_col = QColor(255, 255, 255, 18)
+            p.setPen(QPen(border_col, 1.0))
+            if self._kind == "panel":
+                p.setBrush(QColor(pal.panel))
+            else:
+                grad = QLinearGradient(0, 0, 0, float(self.height()))
+                grad.setColorAt(0.0, QColor(pal.card_top))
+                grad.setColorAt(1.0, QColor(pal.card_bottom))
+                p.setBrush(grad)
+        p.drawRoundedRect(r, rad, rad)
 
 
 class StatCard(Card):
@@ -73,12 +88,14 @@ class StatCard(Card):
         self._value.setProperty("kind", "card-text")
 
         # Color highlight: soft brushed champagne gold & warm copper
+        pal = theme.current()
         if "reclaim" in label.lower() or "safe" in label.lower():
-            self._value.setStyleSheet("color: #E2B170; font-weight: 600;")
+            accent_col = "#B45309" if pal.name == "light" else "#E0A96D"
+            self._value.setStyleSheet(f"color: {accent_col}; font-weight: 600;")
         elif "duplicate" in label.lower():
             self._value.setStyleSheet("color: #D97706; font-weight: 600;")
         else:
-            self._value.setStyleSheet("color: #F0EFEA; font-weight: 600;")
+            self._value.setStyleSheet(f"color: {pal.text}; font-weight: 600;")
 
         lay.addWidget(self._cap)
         lay.addWidget(self._value)
@@ -104,9 +121,10 @@ class PillButton(QPushButton):
     def paintEvent(self, _e) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         pal = theme.current()
-        r = self.rect().adjusted(1, 1, -1, -1)
-        rad = 12 if self._primary or self._danger else theme.RADIUS_CONTROL
+        r = QRectF(0.5, 0.5, float(self.width()) - 1.0, float(self.height()) - 1.0)
+        rad = 10.0 if (self._primary or self._danger) else float(theme.RADIUS_CONTROL)
 
         if self._primary:
             grad = QLinearGradient(0, 0, r.width(), 0)
@@ -117,28 +135,29 @@ class PillButton(QPushButton):
                 grad.setColorAt(0.0, QColor(pal.accent))
                 grad.setColorAt(1.0, QColor(pal.copper))
             p.setBrush(grad)
-            p.setPen(QPen(QColor(pal.accent), 1))
-            fg = QColor(pal.on_accent)
+            p.setPen(Qt.PenStyle.NoPen)
+            fg = QColor("#141318")  # High contrast crisp charcoal text in both themes
         elif self._danger:
             bg = QColor(pal.danger)
             if self.underMouse() and self.isEnabled():
                 bg = bg.lighter(110)
             p.setBrush(bg)
-            p.setPen(QPen(QColor(pal.danger), 1))
+            p.setPen(Qt.PenStyle.NoPen)
             fg = QColor("#FFFFFF")
         else:
-            bg = QColor(pal.panel)
             border = QColor(pal.panel_border)
             if self.underMouse() and self.isEnabled():
                 bg = QColor(pal.nav_hover)
                 border = QColor(pal.accent)
+            else:
+                bg = QColor(pal.panel)
             p.setBrush(bg)
-            p.setPen(QPen(border, 1))
+            p.setPen(QPen(border, 1.0))
             fg = QColor(pal.text)
 
         if not self.isEnabled():
-            p.setBrush(QColor(pal.panel).lighter(105))
-            p.setPen(QPen(QColor(pal.panel_border), 1))
+            p.setBrush(QColor(pal.panel).lighter(105) if pal.name == "dark" else QColor("#F4F4F6"))
+            p.setPen(QPen(QColor(pal.panel_border), 1.0))
             fg = QColor(pal.text_muted)
         elif self.isDown() or self.isChecked():
             p.setBrush(QColor(pal.panel_border))
@@ -146,7 +165,24 @@ class PillButton(QPushButton):
         p.drawRoundedRect(r, rad, rad)
         p.setPen(fg)
         p.setFont(self.font())
-        p.drawText(r, Qt.AlignmentFlag.AlignCenter, self.text())
+
+        if not self.icon().isNull():
+            ic_size = self.iconSize() if self.iconSize().isValid() else QSize(16, 16)
+            ic = self.icon().pixmap(ic_size)
+            if self.text():
+                fm = p.fontMetrics()
+                total_w = ic.width() + 6 + fm.horizontalAdvance(self.text())
+                ix = (float(self.width()) - float(total_w)) / 2.0
+                iy = (float(self.height()) - float(ic.height())) / 2.0
+                p.drawPixmap(QPointF(ix, iy), ic)
+                text_r = QRectF(ix + float(ic.width()) + 6.0, 0.0, float(self.width()) - (ix + float(ic.width()) + 6.0), float(self.height()))
+                p.drawText(text_r, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self.text())
+            else:
+                ix = (float(self.width()) - float(ic.width())) / 2.0
+                iy = (float(self.height()) - float(ic.height())) / 2.0
+                p.drawPixmap(QPointF(ix, iy), ic)
+        else:
+            p.drawText(r, Qt.AlignmentFlag.AlignCenter, self.text())
 
 
 class ToggleSwitch(QAbstractButton):
@@ -165,18 +201,19 @@ class ToggleSwitch(QAbstractButton):
     def paintEvent(self, _e) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         pal = theme.current()
         on = self.isChecked()
 
         track = QColor(pal.accent) if on else QColor(pal.input_border)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(track)
-        p.drawRoundedRect(0, 0, 48, 26, 13, 13)
+        p.drawRoundedRect(QRectF(0.5, 0.5, 47.0, 25.0), 12.5, 12.5)
 
-        kx = 25 if on else 3
-        knob_color = QColor(pal.on_accent) if on else QColor("#FFFFFF")
-        p.setBrush(knob_color)
-        p.drawEllipse(kx, 3, 20, 20)
+        kx = 25.0 if on else 3.0
+        p.setBrush(QColor("#FFFFFF"))
+        p.setPen(QPen(QColor(0, 0, 0, 25), 0.5))
+        p.drawEllipse(QRectF(kx, 3.0, 20.0, 20.0))
 
 
 class ListRow(QFrame):
@@ -193,10 +230,11 @@ class ListRow(QFrame):
         lay.setContentsMargins(14, 10, 14, 10)
         lay.setSpacing(14)
 
+        pal = theme.current()
         self._icon = QLabel()
         self._icon.setFixedSize(26, 26)
         if icon_name:
-            self._icon.setPixmap(icons.icon(icon_name, "#E2B170").pixmap(QSize(24, 24)))
+            self._icon.setPixmap(icons.icon(icon_name, pal.accent).pixmap(QSize(24, 24)))
 
         self._title = QLabel(title)
         f = self._title.font()
@@ -221,11 +259,12 @@ class ListRow(QFrame):
     def paintEvent(self, _e) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         pal = theme.current()
-        p.setPen(QPen(QColor(pal.panel_border), 1))
+        r = QRectF(0.5, 0.5, float(self.width()) - 1.0, float(self.height()) - 1.0)
+        p.setPen(QPen(QColor(pal.panel_border), 1.0))
         p.setBrush(QColor(pal.panel))
-        p.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1),
-                          theme.RADIUS_CONTROL, theme.RADIUS_CONTROL)
+        p.drawRoundedRect(r, float(theme.RADIUS_CONTROL), float(theme.RADIUS_CONTROL))
 
     def set_title(self, t: str) -> None:
         self._title.setText(t)
@@ -654,8 +693,9 @@ class DiskUsageCard(Card):
         top_row = QHBoxLayout()
         top_row.setSpacing(12)
 
+        pal = theme.current()
         icon_lbl = QLabel()
-        icon_lbl.setPixmap(icons.icon("disk", "#E2B170").pixmap(QSize(22, 22)))
+        icon_lbl.setPixmap(icons.icon("disk", pal.accent).pixmap(QSize(22, 22)))
 
         info_box = QVBoxLayout()
         info_box.setSpacing(1)
@@ -672,9 +712,7 @@ class DiskUsageCard(Card):
         info_box.addWidget(sub_lbl)
 
         badge_lbl = QLabel("● Ready to Sift")
-        badge_lbl.setStyleSheet(
-            "color: #E2B170; background: #222228; border: 1px solid #3A3A44; border-radius: 10px; padding: 3px 10px; font-size: 11px; font-weight: bold;"
-        )
+        badge_lbl.setProperty("kind", "micro-badge")
 
         top_row.addWidget(icon_lbl)
         top_row.addLayout(info_box, 1)
@@ -688,10 +726,10 @@ class DiskUsageCard(Card):
         legend.setSpacing(18)
         items = [
             ("#3E3E48", "System & Apps"),
-            ("#E2B170", "Photos & Media"),
-            ("#98C379", "Documents"),
-            ("#E06C75", "Caches & Dups"),
-            ("#6A6A76", f"Free ({free_gb:.0f} GB)"),
+            (pal.accent, "Photos & Media"),
+            (pal.success, "Documents"),
+            (pal.danger, "Caches & Dups"),
+            (pal.text_muted, f"Free ({free_gb:.0f} GB)"),
         ]
         for col_hex, name in items:
             dot_lbl = QLabel(f"● {name}")
@@ -701,13 +739,46 @@ class DiskUsageCard(Card):
         lay.addLayout(legend)
 
 
+class SquircleBadge(QWidget):
+    """Subpixel antialiased squircle container for icons with warm champagne tint."""
+
+    def __init__(self, icon_name: str, size: int = 34, icon_size: int = 20, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(size, size)
+        self._icon_name = icon_name
+        self._icon_size = icon_size
+
+    def paintEvent(self, _e) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        pal = theme.current()
+        w = float(self.width())
+        h = float(self.height())
+        r = QRectF(0.5, 0.5, w - 1.0, h - 1.0)
+        rad = 8.0 if w <= 36 else 10.0
+
+        if pal.name == "light":
+            p.setBrush(QColor("#FFF5E8"))
+            p.setPen(QPen(QColor("#F2DEC7"), 1.0))
+        else:
+            p.setBrush(QColor("#27211B"))
+            p.setPen(QPen(QColor("#3E3227"), 1.0))
+
+        p.drawRoundedRect(r, rad, rad)
+        pm = icons.icon(self._icon_name, pal.accent).pixmap(QSize(self._icon_size, self._icon_size))
+        px = (self.width() - pm.width()) / 2.0
+        py = (self.height() - pm.height()) / 2.0
+        p.drawPixmap(QPointF(px, py), pm)
+
+
 class CategoryBentoCard(Card):
     """Concept 6 Bento Quick Cleaner Card with Apple-style toggle and large metric."""
     toggled = Signal(bool)
 
     def __init__(self, icon_name: str, title: str, stat_val: str, subtitle: str = "", checked: bool = True, parent=None):
         super().__init__("content", parent)
-        self.setFixedHeight(102)
+        self.setFixedHeight(114)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         lay = QVBoxLayout(self)
@@ -718,34 +789,37 @@ class CategoryBentoCard(Card):
         top.setContentsMargins(0, 0, 0, 0)
         top.setSpacing(10)
 
-        self._icon = QLabel()
-        self._icon.setPixmap(icons.icon(icon_name, "#E0A96D").pixmap(QSize(22, 22)))
+        self._badge = SquircleBadge(icon_name, size=34, icon_size=18, parent=self)
 
         self._toggle = ToggleSwitch()
         self._toggle.setChecked(checked)
-        self._toggle.toggled.connect(self.toggled.emit)
+        self._toggle.toggled.connect(self._on_toggled)
 
-        top.addWidget(self._icon)
+        top.addWidget(self._badge)
         top.addStretch(1)
         top.addWidget(self._toggle)
         lay.addLayout(top)
 
         self._title = QLabel(title)
         tf = self._title.font()
-        tf.setPointSize(12)
+        tf.setPointSize(13)
         tf.setWeight(QFont.Weight.Medium)
         self._title.setFont(tf)
-        self._title.setProperty("kind", "card-text")
+        self._title.setProperty("kind", "bento-title")
 
         self._stat = QLabel(stat_val)
         sf = self._stat.font()
-        sf.setPointSize(19)
+        sf.setPointSize(21)
         sf.setWeight(QFont.Weight.DemiBold)
         self._stat.setFont(sf)
-        self._stat.setStyleSheet("color: #FFFFFF;")
+        self._stat.setProperty("kind", "bento-stat")
 
         lay.addWidget(self._title)
         lay.addWidget(self._stat)
+
+    def _on_toggled(self, checked: bool) -> None:
+        self.toggled.emit(checked)
+        self.update()
 
     def is_checked(self) -> bool:
         return self._toggle.isChecked()
