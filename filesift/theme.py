@@ -50,46 +50,46 @@ class Palette:
 # Nordic Zen Minimalist (Soft Warm Charcoal & Brushed Champagne Gold)
 DARK = Palette(
     name="dark",
-    bg="#151419",
-    panel="#1C1B22",
-    panel_border="#282730",
-    card_top="#24232C",
-    card_bottom="#1A1921",
-    text="#F0EFEA",
-    text_muted="#9B9AA5",
-    card_text="#F0EFEA",
-    accent="#E2B170",
-    on_accent="#151419",
-    accent_glow="#E2B170",
-    input_border="#2E2D38",
+    bg="#141318",
+    panel="#1B1A22",
+    panel_border="#272632",
+    card_top="#23222B",
+    card_bottom="#191820",
+    text="#F4F4F6",
+    text_muted="#9E9DAA",
+    card_text="#F4F4F6",
+    accent="#E0A96D",
+    on_accent="#141318",
+    accent_glow="#E0A96D",
+    input_border="#2B2A36",
     danger="#E06C75",
     shadow="#000000",
-    nav_active="#E2B170",
-    nav_hover="#23222B",
+    nav_active="#E0A96D",
+    nav_hover="#23222C",
     success="#98C379",
     warning="#E5C07B",
     copper="#D97706",
 )
 
-# Nordic Light Minimalist (Clean Warm Canvas & Brushed Copper)
+# Nordic Light Minimalist (Warm Alabaster Canvas & Brushed Amber Champagne)
 LIGHT = Palette(
     name="light",
-    bg="#F5F5F7",
+    bg="#F7F7FA",
     panel="#FFFFFF",
-    panel_border="#E4E4E7",
+    panel_border="#E4E4EB",
     card_top="#FFFFFF",
-    card_bottom="#F4F4F6",
+    card_bottom="#F6F6F9",
     text="#18181B",
-    text_muted="#71717A",
+    text_muted="#6E6D7A",
     card_text="#18181B",
-    accent="#C99755",
-    on_accent="#FFFFFF",
-    accent_glow="#C99755",
-    input_border="#D4D4D8",
+    accent="#D99543",
+    on_accent="#18181B",
+    accent_glow="#D99543",
+    input_border="#DFDFE6",
     danger="#DC2626",
-    shadow="#A1A1AA",
-    nav_active="#C99755",
-    nav_hover="#ECECEF",
+    shadow="#D0D0D8",
+    nav_active="#D99543",
+    nav_hover="#F0F0F5",
     success="#16A34A",
     warning="#D97706",
     copper="#B45309",
@@ -134,15 +134,53 @@ def build_stylesheet(p: Palette) -> str:
     QLabel[kind="card-text"] {{
         color: {p.card_text};
     }}
-    QLabel[kind="micro-badge"] {{
-        color: {p.accent};
-        background: {p.card_bottom};
-        border: 1px solid {p.panel_border};
-        border-radius: 4px;
-        padding: 2px 6px;
-        font-size: 10px;
+    QLabel[kind="bento-title"] {{
+        color: {p.text};
+        font-size: 13px;
+        font-weight: 500;
+    }}
+    QLabel[kind="bento-stat"] {{
+        color: {p.text};
+        font-size: 20px;
         font-weight: 600;
-        letter-spacing: 0.5px;
+        letter-spacing: -0.5px;
+    }}
+    QLabel[kind="bento-sub"] {{
+        color: {p.text_muted};
+        font-size: 11px;
+    }}
+    QLabel[kind="micro-badge"] {{
+        color: {"#B45309" if p.name == "light" else "#E0A96D"};
+        background: {"#FFF5E8" if p.name == "light" else "#28211A"};
+        border: 1px solid {"#EEDCC5" if p.name == "light" else "#3F3429"};
+        border-radius: 9px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-weight: 600;
+    }}
+    QLabel[kind="cleanable-badge"] {{
+        color: {"#B45309" if p.name == "light" else "#E0A96D"};
+        background: {"#FFF5E8" if p.name == "light" else "#28211A"};
+        border: 1px solid {"#EEDCC5" if p.name == "light" else "#3F3429"};
+        border-radius: 10px;
+        padding: 3px 10px;
+        font-size: 11px;
+        font-weight: 700;
+    }}
+    QLabel[kind="tag-badge"] {{
+        color: {p.text_muted};
+        background: {"#F0F0F5" if p.name == "light" else "#222129"};
+        border: 1px solid {"#E4E4EB" if p.name == "light" else "#2D2B37"};
+        border-radius: 6px;
+        padding: 2px 7px;
+        font-size: 11px;
+        font-weight: 500;
+    }}
+    QFrame[kind="separator"] {{
+        background: {p.panel_border};
+        border: none;
+        min-height: 1px;
+        max-height: 1px;
     }}
     QFrame[kind="panel"], QFrame[kind="content"] {{
         background: transparent;
